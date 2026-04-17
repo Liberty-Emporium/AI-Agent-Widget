@@ -146,6 +146,10 @@ def call_openrouter(messages, model, api_key):
 
 @app.route('/')
 def index():
+    return render_template('landing.html')
+
+@app.route('/old-index')
+def old_index():
     return render_template('index.html')
 
 @app.route('/pricing')
