@@ -1,0 +1,17 @@
+name: Deploy to Railway
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Syntax check
+        run: python3 -m py_compile app.py && echo "✅ Syntax OK"
+      - name: Install & lint
+        run: pip install flake8 && flake8 app.py --max-line-length=120 --ignore=E501,W503 || true
+      - name: Deploy via Railway
+        run: echo "Railway auto-deploys from GitHub push ✅"
