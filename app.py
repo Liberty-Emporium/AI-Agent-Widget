@@ -133,14 +133,21 @@ def call_openrouter(messages, model, api_key):
         r = _req.post(
             'https://openrouter.ai/api/v1/chat/completions',
             headers={'Authorization': f'Bearer {api_key}',
-                     'Content-Type': 'application/json'},
+                     'Content-Type': 'application/json',
+                     'HTTP-Referer': 'https://ai-agent-widget-production.up.railway.app',
+                     'X-Title': 'Alexander AI Agent'},
             json={'model': model, 'messages': messages, 'max_tokens': 800},
             timeout=30
         )
+        if r.status_code == 401:
+            return "Configuration error: invalid API key. Please check your OpenRouter key in the dashboard."
+        if r.status_code == 402:
+            return "API key has insufficient credits. Please add credits at openrouter.ai."
         r.raise_for_status()
         return r.json()['choices'][0]['message']['content']
     except Exception as e:
-        return f"Sorry, I'm having trouble connecting. Please try again. ({type(e).__name__})"
+        app.logger.error(f'OpenRouter error: {type(e).__name__}: {e}')
+        return f"I'm having trouble connecting right now. Please try again in a moment."
 
 # ── Public pages ──────────────────────────────────────────────────────────────
 
@@ -364,7 +371,7 @@ def widget_js(agent_id):
         return 'console.error("Alexander AI Agent: invalid agent ID");', 404, \
                {'Content-Type': 'application/javascript'}
 
-    base_url = request.host_url.rstrip('/')
+    base_url = request.host_url.rstrip('/').replace('http://', 'https://')
     js = render_template('widget.js',
         agent=dict(agent), base_url=base_url,
         color=agent['color'], avatar=agent['avatar'],

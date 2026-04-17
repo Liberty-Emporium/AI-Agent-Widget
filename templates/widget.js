@@ -4,7 +4,7 @@
   window.__AlexanderAI_{{ agent.id | replace('-','_') }} = true;
 
   var AGENT_ID  = '{{ agent.id }}';
-  var BASE_URL  = '{{ base_url }}';
+  var BASE_URL  = '{{ base_url }}'.replace('http://', 'https://');
   var COLOR     = '{{ color }}';
   var AVATAR    = '{{ avatar }}';
   var NAME      = '{{ name | e }}';
