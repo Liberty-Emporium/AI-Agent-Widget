@@ -152,6 +152,22 @@
         <textarea class="prompt-box notes-box" name="training_notes" placeholder="e.g. Customer sells handmade jewelry. Bot should recommend products, know about shipping (3-5 days), return policy (30 days). Tone: warm and helpful.&#10;&#10;Session 1 (Apr 18): Updated greeting, added product knowledge, fixed response about returns.">{{ agent.training_notes or '' }}</textarea>
       </div>
 
+      <!-- Embed Code -->
+      <div class="config-card">
+        <h3>🔗 Embed Code</h3>
+        <p style="font-size:0.82rem;color:#6b7280;margin-bottom:.75rem;">Paste this before <code style="background:#0d1117;padding:1px 6px;border-radius:4px;color:#818cf8;">&lt;/body&gt;</code> on any HTML page.</p>
+        <div style="background:#0d1117;border:1px solid rgba(99,102,241,0.3);border-radius:10px;padding:1rem;font-family:monospace;font-size:0.82rem;color:#818cf8;word-break:break-all;line-height:1.7;" id="embedCodeBox">&lt;script src="https://ai-agent-widget-production.up.railway.app/widget/{{ agent.id }}.js"&gt;&lt;/script&gt;</div>
+        <button type="button" class="btn btn-outline btn-sm" style="margin-top:8px;" onclick="copyEmbed()">📋 Copy Embed Code</button>
+        <div style="margin-top:1rem;padding-top:1rem;border-top:1px solid rgba(255,255,255,0.07);">
+          <p style="font-size:0.82rem;color:#6b7280;margin-bottom:.75rem;">Direct chat API endpoint (for custom integrations):</p>
+          <div style="background:#0d1117;border:1px solid rgba(255,255,255,0.08);border-radius:10px;padding:.75rem 1rem;font-family:monospace;font-size:0.78rem;color:#6b7280;line-height:1.7;">
+            POST https://ai-agent-widget-production.up.railway.app/chat/{{ agent.id }}<br>
+            Content-Type: application/json<br>
+            {"message": "Hello!", "history": [], "session_id": "user-123"}
+          </div>
+        </div>
+      </div>
+
       <!-- Save -->
       <button type="submit" class="btn btn-primary" style="width:100%;padding:13px;font-size:1rem;">
         💾 Save Training Changes
@@ -296,6 +312,16 @@ async function sendTestMsg(){
 inputEl.addEventListener('keydown', function(e){
   if(e.key === 'Enter') sendTestMsg();
 });
+
+function copyEmbed(){
+  var code = '<script src="https://ai-agent-widget-production.up.railway.app/widget/' + AGENT_ID + '.js"><\/script>';
+  navigator.clipboard.writeText(code).then(function(){
+    var btn = document.querySelector('[onclick="copyEmbed()"]');
+    var orig = btn.textContent;
+    btn.textContent = '✅ Copied!';
+    setTimeout(function(){ btn.textContent = orig; }, 2000);
+  });
+}
 
 // Warn if leaving with unsaved changes
 var originalPrompt = document.getElementById('systemPrompt').value;
