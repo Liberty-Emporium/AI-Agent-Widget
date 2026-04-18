@@ -35,6 +35,41 @@
     </div>
   </div>
 
+  {% if not agents %}
+  <!-- ONBOARDING PANEL (shown when user has no agents yet) -->
+  <div style="background:linear-gradient(135deg,rgba(99,102,241,0.08),rgba(99,102,241,0.03));border:1px solid rgba(99,102,241,0.2);border-radius:16px;padding:2.5rem;margin-bottom:2rem;">
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:1.5rem;">
+      <div style="font-size:1.75rem;">👋</div>
+      <div>
+        <h2 style="font-size:1.1rem;font-weight:800;">Welcome! Let's get your first AI agent live.</h2>
+        <p style="color:#6b7280;font-size:0.85rem;margin-top:2px;">3 steps. Under 5 minutes. No coding required.</p>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:1rem;margin-bottom:1.75rem;">
+      <div style="background:#111827;border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:1.25rem;">
+        <div style="width:32px;height:32px;border-radius:8px;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;font-weight:800;font-size:0.9rem;display:flex;align-items:center;justify-content:center;margin-bottom:.75rem;">1</div>
+        <div style="font-weight:700;font-size:0.9rem;margin-bottom:.35rem;">Build Your Agent</div>
+        <div style="font-size:0.82rem;color:#6b7280;line-height:1.55;">Give it a name, pick a color, write its personality. Takes 2 minutes.</div>
+      </div>
+      <div style="background:#111827;border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:1.25rem;">
+        <div style="width:32px;height:32px;border-radius:8px;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;font-weight:800;font-size:0.9rem;display:flex;align-items:center;justify-content:center;margin-bottom:.75rem;">2</div>
+        <div style="font-weight:700;font-size:0.9rem;margin-bottom:.35rem;">Copy One Line of Code</div>
+        <div style="font-size:0.82rem;color:#6b7280;line-height:1.55;">You'll get a single &lt;script&gt; tag from your agent's page.</div>
+      </div>
+      <div style="background:#111827;border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:1.25rem;">
+        <div style="width:32px;height:32px;border-radius:8px;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;font-weight:800;font-size:0.9rem;display:flex;align-items:center;justify-content:center;margin-bottom:.75rem;">3</div>
+        <div style="font-weight:700;font-size:0.9rem;margin-bottom:.35rem;">Paste &amp; Go Live</div>
+        <div style="font-size:0.82rem;color:#6b7280;line-height:1.55;">Drop it before &lt;/body&gt; on any page. Your AI is live instantly.</div>
+      </div>
+    </div>
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+      <a href="/agent/new" class="btn btn-primary">🚀 Create My First Agent</a>
+      <a href="https://ai-widget-test-site-production.up.railway.app/#how" target="_blank" class="btn btn-outline btn-sm">👁 See How It Works</a>
+      <a href="https://luxury-rentals-demo-production.up.railway.app" target="_blank" class="btn btn-outline btn-sm">🏡 See a Live Example</a>
+    </div>
+  </div>
+  {% endif %}
+
   {% if agents %}
   <div class="agent-grid">
     {% for a in agents %}
