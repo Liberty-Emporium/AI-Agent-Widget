@@ -70,6 +70,22 @@ def init_db():
 
 init_db()
 
+def migrate_model_names():
+    """Fix any legacy/broken model names in the database on startup."""
+    try:
+        db = sqlite3.connect(DB_PATH)
+        db.row_factory = sqlite3.Row
+        agents = db.execute('SELECT id, model FROM agents').fetchall()
+        for agent in agents:
+            fixed = normalize_model(agent['model'])
+            if fixed != agent['model']:
+                app.logger.info(f"Migrating model: {agent['model']} -> {fixed} (agent {agent['id']})")
+                db.execute('UPDATE agents SET model=? WHERE id=?', (fixed, agent['id']))
+        db.commit()
+        db.close()
+    except Exception as e:
+        app.logger.error(f'Model migration error: {e}')
+
 # ── Auth helpers ──────────────────────────────────────────────────────────────
 
 import bcrypt as _bcrypt
@@ -127,34 +143,42 @@ def cors_headers(res):
 # ── Model name normalizer ────────────────────────────────────────────────────
 
 MODEL_ALIASES = {
-    'gemini-flash-1.5':           'google/gemini-flash-1.5',
-    'gemini-pro':                 'google/gemini-pro',
-    'gemini-1.5-pro':             'google/gemini-pro-1.5',
-    'gemini-2.0-flash':           'google/gemini-2.0-flash-001',
-    'gemini-flash-2.0':           'google/gemini-2.0-flash-001',
-    'claude-3-haiku':             'anthropic/claude-3-haiku',
-    'claude-3.5-sonnet':          'anthropic/claude-3.5-sonnet',
-    'claude-3-sonnet':            'anthropic/claude-3-sonnet',
-    'claude-3-opus':              'anthropic/claude-3-opus',
-    'gpt-4o':                     'openai/gpt-4o',
-    'gpt-4o-mini':                'openai/gpt-4o-mini',
-    'gpt-4':                      'openai/gpt-4',
-    'gpt-3.5-turbo':              'openai/gpt-3.5-turbo',
-    'llama-3.1-8b':               'meta-llama/llama-3.1-8b-instruct:free',
-    'llama-3.1-8b-instruct':      'meta-llama/llama-3.1-8b-instruct:free',
-    'llama-3.3-70b':              'meta-llama/llama-3.3-70b-instruct',
-    'mistral-7b':                 'mistralai/mistral-7b-instruct',
-    'mixtral-8x7b':               'mistralai/mixtral-8x7b-instruct',
+    # Gemini
+    'gemini-flash-1.5':                      'google/gemini-flash-1.5',
+    'gemini-pro':                            'google/gemini-pro',
+    'gemini-1.5-pro':                        'google/gemini-pro-1.5',
+    'gemini-2.0-flash':                      'google/gemini-2.0-flash-001',
+    'gemini-flash-2.0':                      'google/gemini-2.0-flash-001',
+    # Claude
+    'claude-3-haiku':                        'anthropic/claude-3.5-haiku',
+    'claude-3.5-haiku':                      'anthropic/claude-3.5-haiku',
+    'claude-3.5-sonnet':                     'anthropic/claude-sonnet-4-5',
+    'claude-3-sonnet':                       'anthropic/claude-sonnet-4-5',
+    'claude-3-opus':                         'anthropic/claude-3-opus',
+    'anthropic/claude-3-haiku':              'anthropic/claude-3.5-haiku',
+    'anthropic/claude-3.5-sonnet':           'anthropic/claude-sonnet-4-5',
+    # GPT
+    'gpt-4o':                                'openai/gpt-4o',
+    'gpt-4o-mini':                           'openai/gpt-4o-mini',
+    'gpt-4':                                 'openai/gpt-4',
+    'gpt-3.5-turbo':                         'openai/gpt-3.5-turbo',
+    # Llama — old free tier IDs that are now 404
+    'meta-llama/llama-3.1-8b-instruct:free': 'meta-llama/llama-3.3-70b-instruct',
+    'llama-3.1-8b':                          'meta-llama/llama-3.3-70b-instruct',
+    'llama-3.1-8b-instruct':                 'meta-llama/llama-3.3-70b-instruct',
+    'llama-3.3-70b':                         'meta-llama/llama-3.3-70b-instruct',
+    # Mistral
+    'mistral-7b':                            'mistralai/mistral-7b-instruct',
+    'mixtral-8x7b':                          'mistralai/mixtral-8x7b-instruct',
 }
 
 def normalize_model(model):
     """Fix common shorthand model names to their full OpenRouter IDs."""
     if not model:
         return 'openai/gpt-4o-mini'
-    # Already has a slash — assume it's correct
-    if '/' in model:
-        return model
-    return MODEL_ALIASES.get(model.lower(), model)
+    return MODEL_ALIASES.get(model, MODEL_ALIASES.get(model.lower(), model))
+
+migrate_model_names()
 
 # ── OpenRouter chat ───────────────────────────────────────────────────────────
 
