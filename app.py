@@ -33,6 +33,7 @@ def init_db():
             email     TEXT UNIQUE NOT NULL,
             password  TEXT NOT NULL,
             plan      TEXT DEFAULT 'free',
+            is_admin  INTEGER DEFAULT 0,
             created   TEXT DEFAULT (datetime('now'))
         );
         CREATE TABLE IF NOT EXISTS agents (
@@ -284,9 +285,10 @@ def login():
         if not user or not check_pw(password, user['password']):
             flash('Invalid email or password.', 'error')
             return render_template('login.html')
-        session['user_id'] = user['id']
-        session['email']   = user['email']
-        session['plan']    = user['plan']
+        session['user_id']  = user['id']
+        session['email']    = user['email']
+        session['plan']     = user['plan']
+        session['is_admin'] = bool(user['is_admin'])
         return redirect(url_for('dashboard'))
     return render_template('login.html')
 
@@ -529,6 +531,107 @@ def agent_analytics(agent_id):
         (agent_id,)
     ).fetchall()
     return render_template('analytics.html', agent=agent, messages=msgs)
+
+# ── Admin bootstrap ───────────────────────────────────────────────────────
+
+ADMIN_EMAIL = os.environ.get('ADMIN_EMAIL', 'emporiumandthrift@gmail.com')
+
+def bootstrap_admin():
+    """Ensure the admin user exists and has admin + pro plan."""
+    try:
+        db = sqlite3.connect(DB_PATH)
+        # Add is_admin column if it doesn't exist yet (migration)
+        try:
+            db.execute('ALTER TABLE users ADD COLUMN is_admin INTEGER DEFAULT 0')
+            db.commit()
+        except Exception:
+            pass  # Column already exists
+        db.execute(
+            'UPDATE users SET is_admin=1, plan=? WHERE email=?',
+            ('admin', ADMIN_EMAIL)
+        )
+        db.commit()
+        affected = db.execute('SELECT changes()').fetchone()[0]
+        if affected:
+            app.logger.info(f'Admin privileges granted to {ADMIN_EMAIL}')
+        db.close()
+    except Exception as e:
+        app.logger.error(f'Admin bootstrap error: {e}')
+
+bootstrap_admin()
+
+# ── Admin required decorator ───────────────────────────────────────────────
+
+def admin_required(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if 'user_id' not in session:
+            return redirect(url_for('login'))
+        db = get_db()
+        user = db.execute('SELECT is_admin FROM users WHERE id=?', (session['user_id'],)).fetchone()
+        if not user or not user['is_admin']:
+            flash('Admin access required.', 'error')
+            return redirect(url_for('dashboard'))
+        return f(*args, **kwargs)
+    return decorated
+
+# ── Admin panel ───────────────────────────────────────────────────────────
+
+@app.route('/admin')
+@admin_required
+def admin_panel():
+    db = get_db()
+    users  = db.execute('SELECT u.*, (SELECT COUNT(*) FROM agents a WHERE a.user_id=u.id) as agent_count, (SELECT COUNT(*) FROM messages m JOIN agents a ON m.agent_id=a.id WHERE a.user_id=u.id) as msg_count FROM users u ORDER BY u.created DESC').fetchall()
+    agents = db.execute('SELECT a.*, u.email FROM agents a JOIN users u ON a.user_id=u.id ORDER BY a.created DESC').fetchall()
+    stats  = {
+        'users':    db.execute('SELECT COUNT(*) FROM users').fetchone()[0],
+        'agents':   db.execute('SELECT COUNT(*) FROM agents').fetchone()[0],
+        'messages': db.execute('SELECT COUNT(*) FROM messages').fetchone()[0],
+        'pro_users': db.execute("SELECT COUNT(*) FROM users WHERE plan='pro'").fetchone()[0],
+    }
+    return render_template('admin.html', users=users, agents=agents, stats=stats)
+
+@app.route('/admin/user/<int:user_id>/plan', methods=['POST'])
+@admin_required
+def admin_set_plan(user_id):
+    plan = request.form.get('plan', 'free')
+    if plan not in ('free', 'pro', 'business', 'admin'):
+        flash('Invalid plan.', 'error')
+        return redirect(url_for('admin_panel'))
+    db = get_db()
+    db.execute('UPDATE users SET plan=? WHERE id=?', (plan, user_id))
+    db.commit()
+    flash(f'Plan updated to {plan}.', 'success')
+    return redirect(url_for('admin_panel'))
+
+@app.route('/admin/user/<int:user_id>/delete', methods=['POST'])
+@admin_required
+def admin_delete_user(user_id):
+    db = get_db()
+    # Don't delete yourself
+    if user_id == session['user_id']:
+        flash('Cannot delete your own account.', 'error')
+        return redirect(url_for('admin_panel'))
+    db.execute('DELETE FROM messages WHERE agent_id IN (SELECT id FROM agents WHERE user_id=?)', (user_id,))
+    db.execute('DELETE FROM agents WHERE user_id=?', (user_id,))
+    db.execute('DELETE FROM users WHERE id=?', (user_id,))
+    db.commit()
+    flash('User deleted.', 'success')
+    return redirect(url_for('admin_panel'))
+
+@app.route('/admin/user/<int:user_id>/toggle-admin', methods=['POST'])
+@admin_required
+def admin_toggle_admin(user_id):
+    if user_id == session['user_id']:
+        flash('Cannot change your own admin status.', 'error')
+        return redirect(url_for('admin_panel'))
+    db = get_db()
+    current = db.execute('SELECT is_admin FROM users WHERE id=?', (user_id,)).fetchone()
+    new_val = 0 if current and current['is_admin'] else 1
+    db.execute('UPDATE users SET is_admin=? WHERE id=?', (new_val, user_id))
+    db.commit()
+    flash(f'Admin status {"granted" if new_val else "revoked"}.', 'success')
+    return redirect(url_for('admin_panel'))
 
 if __name__ == '__main__':
     app.run(debug=True, port=5000)
