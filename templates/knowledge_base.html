@@ -1,0 +1,265 @@
+{% extends "base.html" %}
+{% block title %}Knowledge Base — {{ agent.name }}{% endblock %}
+{% block extra_css %}
+<style>
+  .kb-entry{background:#111827;border:1px solid rgba(255,255,255,0.08);border-radius:10px;padding:1rem 1.25rem;margin-bottom:0.75rem;}
+  .kb-entry-header{display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap;}
+  .kb-type-badge{font-size:0.72rem;font-weight:700;padding:3px 10px;border-radius:20px;text-transform:uppercase;letter-spacing:.05em;}
+  .kb-type-text{background:rgba(99,102,241,0.15);color:#818cf8;}
+  .kb-type-url{background:rgba(16,185,129,0.15);color:#10b981;}
+  .kb-type-file{background:rgba(245,158,11,0.15);color:#f59e0b;}
+  .kb-preview{font-size:0.82rem;color:#6b7280;margin-top:8px;line-height:1.5;word-break:break-word;}
+  .kb-meta{font-size:0.75rem;color:#4b5563;margin-top:6px;}
+  .tab-bar{display:flex;gap:4px;margin-bottom:1.5rem;border-bottom:1px solid rgba(255,255,255,0.08);padding-bottom:0;}
+  .tab-btn{padding:8px 20px;border:none;background:none;color:#6b7280;font-size:0.88rem;font-weight:600;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;transition:all .15s;}
+  .tab-btn.active{color:#6366f1;border-bottom-color:#6366f1;}
+  .tab-pane{display:none;}
+  .tab-pane.active{display:block;}
+  .char-count{font-size:0.78rem;color:#6b7280;text-align:right;margin-top:4px;}
+  .drop-zone{border:2px dashed rgba(99,102,241,0.35);border-radius:10px;padding:2rem;text-align:center;cursor:pointer;transition:all .2s;color:#6b7280;}
+  .drop-zone:hover,.drop-zone.drag-over{border-color:#6366f1;background:rgba(99,102,241,0.05);}
+  .kb-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:1rem;margin-bottom:1.5rem;}
+  .kb-stat{background:#111827;border:1px solid rgba(255,255,255,0.08);border-radius:10px;padding:1rem;text-align:center;}
+  .kb-stat-val{font-size:1.4rem;font-weight:800;color:#6366f1;}
+  .kb-stat-label{font-size:0.75rem;color:#6b7280;margin-top:2px;}
+</style>
+{% endblock %}
+{% block content %}
+<div class="container">
+  <!-- Header -->
+  <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:1rem;margin-bottom:2rem;">
+    <div style="display:flex;align-items:center;gap:12px;">
+      <a href="/agent/{{ agent.id }}" style="color:#6b7280;font-size:0.88rem;">← {{ agent.name }}</a>
+      <span style="color:#4b5563;">/</span>
+      <h1 style="font-size:1.25rem;font-weight:800;">🧠 Knowledge Base</h1>
+    </div>
+    <a href="/agent/{{ agent.id }}" class="btn btn-outline btn-sm">← Back to Agent</a>
+  </div>
+
+  <!-- Stats -->
+  <div class="kb-stats">
+    <div class="kb-stat">
+      <div class="kb-stat-val">{{ entries|length }}</div>
+      <div class="kb-stat-label">KB Entries</div>
+    </div>
+    <div class="kb-stat">
+      <div class="kb-stat-val">{{ total_chars|default(0) }}</div>
+      <div class="kb-stat-label">Total Chars</div>
+    </div>
+    <div class="kb-stat">
+      <div class="kb-stat-val">{{ memory_count|default(0) }}</div>
+      <div class="kb-stat-label">Visitor Memories</div>
+    </div>
+  </div>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;align-items:start;">
+
+    <!-- LEFT: Add new entry -->
+    <div class="card">
+      <h2 style="font-size:1rem;font-weight:700;margin-bottom:1.25rem;">➕ Add Knowledge</h2>
+
+      <div class="tab-bar">
+        <button class="tab-btn active" onclick="switchTab('text',this)">📝 Text</button>
+        <button class="tab-btn" onclick="switchTab('url',this)">🔗 URL</button>
+        <button class="tab-btn" onclick="switchTab('file',this)">📄 File</button>
+      </div>
+
+      <!-- Text tab -->
+      <div id="tab-text" class="tab-pane active">
+        <form method="POST" action="/agent/{{ agent.id }}/kb/add">
+          <input type="hidden" name="type" value="text">
+          <div class="form-group">
+            <label>Title (optional)</label>
+            <input type="text" name="title" placeholder="e.g. Product FAQ, Return Policy…">
+          </div>
+          <div class="form-group">
+            <label>Content</label>
+            <textarea name="content" id="textContent" rows="8" placeholder="Paste any text here — FAQs, product info, policies, pricing, anything you want your bot to know…" required maxlength="10000" style="resize:vertical;"></textarea>
+            <div class="char-count"><span id="textCharCount">0</span> / 10,000</div>
+          </div>
+          <button type="submit" class="btn btn-primary" style="width:100%;justify-content:center;">Save to Knowledge Base</button>
+        </form>
+      </div>
+
+      <!-- URL tab -->
+      <div id="tab-url" class="tab-pane">
+        <form method="POST" action="/agent/{{ agent.id }}/kb/add">
+          <input type="hidden" name="type" value="url">
+          <div class="form-group">
+            <label>URL to scrape</label>
+            <input type="url" name="url" placeholder="https://your-website.com/faq" required>
+          </div>
+          <div class="form-group">
+            <label>Title (optional)</label>
+            <input type="text" name="title" placeholder="e.g. Our FAQ Page">
+          </div>
+          <button type="submit" class="btn btn-primary" style="width:100%;justify-content:center;" id="scrapeBtn">
+            🔗 Scrape & Save
+          </button>
+          <p style="font-size:0.78rem;color:#6b7280;margin-top:8px;text-align:center;">We'll fetch and extract the page text automatically.</p>
+        </form>
+      </div>
+
+      <!-- File tab -->
+      <div id="tab-file" class="tab-pane">
+        <form method="POST" action="/agent/{{ agent.id }}/kb/add" enctype="multipart/form-data">
+          <input type="hidden" name="type" value="file">
+          <div class="form-group">
+            <label>Upload File</label>
+            <div class="drop-zone" id="dropZone" onclick="document.getElementById('fileInput').click()">
+              <div style="font-size:2rem;margin-bottom:8px;">📄</div>
+              <div style="font-weight:600;margin-bottom:4px;">Click to upload or drag & drop</div>
+              <div style="font-size:0.8rem;">.txt files supported (max 500KB)</div>
+              <div id="fileName" style="margin-top:10px;color:#6366f1;font-weight:600;display:none;"></div>
+            </div>
+            <input type="file" id="fileInput" name="file" accept=".txt" style="display:none;" required>
+          </div>
+          <div class="form-group">
+            <label>Title (optional)</label>
+            <input type="text" name="title" placeholder="e.g. Product Manual">
+          </div>
+          <button type="submit" class="btn btn-primary" style="width:100%;justify-content:center;">📤 Upload & Save</button>
+        </form>
+      </div>
+    </div>
+
+    <!-- RIGHT: Existing entries -->
+    <div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;">
+        <h2 style="font-size:1rem;font-weight:700;">📚 Current Knowledge Base</h2>
+        {% if entries %}
+        <form method="POST" action="/agent/{{ agent.id }}/kb/clear" onsubmit="return confirm('Clear all KB entries? This cannot be undone.')">
+          <button type="submit" class="btn btn-danger btn-sm">🗑 Clear All</button>
+        </form>
+        {% endif %}
+      </div>
+
+      {% if entries %}
+        {% for entry in entries %}
+        <div class="kb-entry">
+          <div class="kb-entry-header">
+            <div style="display:flex;align-items:center;gap:8px;flex:1;min-width:0;">
+              <span class="kb-type-badge kb-type-{{ entry.type }}">{{ entry.type }}</span>
+              <span style="font-weight:600;font-size:0.88rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
+                {{ entry.title or 'Untitled' }}
+              </span>
+            </div>
+            <form method="POST" action="/agent/{{ agent.id }}/kb/delete/{{ entry.id }}" style="flex-shrink:0;">
+              <button type="submit" class="btn btn-danger btn-sm" title="Delete">✕</button>
+            </form>
+          </div>
+          <div class="kb-preview">{{ entry.content[:200] }}{{ '…' if entry.content|length > 200 else '' }}</div>
+          <div class="kb-meta">{{ entry.content|length }} chars · Added {{ entry.created[:10] }}</div>
+        </div>
+        {% endfor %}
+      {% else %}
+        <div style="text-align:center;padding:3rem 1rem;color:#4b5563;">
+          <div style="font-size:3rem;margin-bottom:1rem;">🧠</div>
+          <div style="font-weight:600;margin-bottom:6px;">No knowledge yet</div>
+          <div style="font-size:0.85rem;">Add text, URLs, or files on the left to teach your bot.</div>
+        </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Memory Section -->
+  <div class="card" style="margin-top:1.5rem;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;">
+      <div>
+        <h2 style="font-size:1rem;font-weight:700;">💬 Visitor Memory</h2>
+        <p style="color:#6b7280;font-size:0.82rem;margin-top:4px;">Your bot remembers returning visitors across sessions.</p>
+      </div>
+      {% if memories %}
+      <form method="POST" action="/agent/{{ agent.id }}/memory/clear" onsubmit="return confirm('Clear all visitor memories?')">
+        <button type="submit" class="btn btn-danger btn-sm">🗑 Clear All Memories</button>
+      </form>
+      {% endif %}
+    </div>
+    {% if memories %}
+    <div style="overflow-x:auto;">
+      <table style="width:100%;font-size:0.83rem;border-collapse:collapse;">
+        <thead>
+          <tr style="color:#6b7280;text-align:left;border-bottom:1px solid rgba(255,255,255,0.08);">
+            <th style="padding:8px 12px;">Visitor ID</th>
+            <th style="padding:8px 12px;">Memory Summary</th>
+            <th style="padding:8px 12px;">Messages</th>
+            <th style="padding:8px 12px;">Last Seen</th>
+            <th style="padding:8px 12px;"></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for m in memories %}
+          <tr style="border-bottom:1px solid rgba(255,255,255,0.04);">
+            <td style="padding:8px 12px;font-family:monospace;color:#818cf8;">{{ m.session_id[:16] }}…</td>
+            <td style="padding:8px 12px;color:#94a3b8;max-width:300px;">{{ m.summary[:120] }}{{ '…' if m.summary|length > 120 else '' }}</td>
+            <td style="padding:8px 12px;text-align:center;">{{ m.message_count }}</td>
+            <td style="padding:8px 12px;color:#6b7280;">{{ m.last_seen[:16] }}</td>
+            <td style="padding:8px 12px;">
+              <form method="POST" action="/agent/{{ agent.id }}/memory/delete/{{ m.id }}">
+                <button type="submit" class="btn btn-danger btn-sm">✕</button>
+              </form>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div style="text-align:center;padding:2rem;color:#4b5563;">
+      <div style="font-size:2rem;margin-bottom:8px;">💬</div>
+      <div style="font-size:0.85rem;">No visitor memories yet. They'll appear here once visitors chat with your bot.</div>
+    </div>
+    {% endif %}
+  </div>
+
+</div>
+{% endblock %}
+{% block extra_js %}
+<script>
+function switchTab(name, btn){
+  document.querySelectorAll('.tab-pane').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('tab-'+name).classList.add('active');
+  btn.classList.add('active');
+}
+
+// Char counter
+var ta = document.getElementById('textContent');
+var counter = document.getElementById('textCharCount');
+if(ta && counter){
+  ta.addEventListener('input', function(){ counter.textContent = this.value.length; });
+}
+
+// File drop zone
+var fileInput = document.getElementById('fileInput');
+var dropZone = document.getElementById('dropZone');
+var fileName = document.getElementById('fileName');
+if(fileInput){
+  fileInput.addEventListener('change', function(){
+    if(this.files[0]){
+      fileName.textContent = '📄 ' + this.files[0].name;
+      fileName.style.display = 'block';
+    }
+  });
+}
+if(dropZone){
+  dropZone.addEventListener('dragover', function(e){ e.preventDefault(); this.classList.add('drag-over'); });
+  dropZone.addEventListener('dragleave', function(){ this.classList.remove('drag-over'); });
+  dropZone.addEventListener('drop', function(e){
+    e.preventDefault();
+    this.classList.remove('drag-over');
+    var f = e.dataTransfer.files[0];
+    if(f){ fileInput.files = e.dataTransfer.files; fileName.textContent='📄 '+f.name; fileName.style.display='block'; }
+  });
+}
+
+// Scrape loading state
+var scrapeBtn = document.getElementById('scrapeBtn');
+if(scrapeBtn){
+  scrapeBtn.closest('form').addEventListener('submit', function(){
+    scrapeBtn.textContent = '⏳ Scraping…';
+    scrapeBtn.disabled = true;
+  });
+}
+</script>
+{% endblock %}

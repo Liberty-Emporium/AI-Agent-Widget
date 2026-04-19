@@ -1,4 +1,5 @@
 import os, sqlite3, secrets, hashlib, json, time, threading, datetime
+import urllib.request
 from functools import wraps
 from flask import (Flask, render_template, request, redirect, url_for,
                    session, flash, jsonify, g)
@@ -80,6 +81,28 @@ def init_db():
             ts   REAL NOT NULL
         );
         CREATE INDEX IF NOT EXISTS idx_rate_log_key ON rate_log(key);
+        CREATE TABLE IF NOT EXISTS knowledge_base (
+            id       INTEGER PRIMARY KEY AUTOINCREMENT,
+            agent_id TEXT NOT NULL,
+            type     TEXT NOT NULL DEFAULT 'text',
+            title    TEXT DEFAULT '',
+            content  TEXT NOT NULL,
+            source   TEXT DEFAULT '',
+            created  TEXT DEFAULT (datetime('now')),
+            FOREIGN KEY(agent_id) REFERENCES agents(id)
+        );
+        CREATE INDEX IF NOT EXISTS idx_kb_agent ON knowledge_base(agent_id);
+        CREATE TABLE IF NOT EXISTS session_memory (
+            id            INTEGER PRIMARY KEY AUTOINCREMENT,
+            agent_id      TEXT NOT NULL,
+            session_id    TEXT NOT NULL,
+            summary       TEXT NOT NULL DEFAULT '',
+            message_count INTEGER DEFAULT 0,
+            last_seen     TEXT DEFAULT (datetime('now')),
+            UNIQUE(agent_id, session_id),
+            FOREIGN KEY(agent_id) REFERENCES agents(id)
+        );
+        CREATE INDEX IF NOT EXISTS idx_memory_agent_session ON session_memory(agent_id, session_id);
     ''')
     db.commit()
     db.close()
@@ -556,8 +579,30 @@ def chat(agent_id):
         db.execute('UPDATE agents SET model=? WHERE id=?', (model, agent_id))
         db.commit()
 
-    messages = [{'role': 'system', 'content': agent['system_prompt']}]
-    for h in history[-10:]:  # last 10 turns for context
+    # ── Inject Knowledge Base into system prompt ──
+    kb_entries = db.execute(
+        'SELECT title, content FROM knowledge_base WHERE agent_id=? ORDER BY created ASC',
+        (agent_id,)
+    ).fetchall()
+    if kb_entries:
+        kb_text = '\n\n'.join(
+            f"[{e['title'] or 'Knowledge'}]\n{e['content']}" for e in kb_entries
+        )
+        system_content = agent['system_prompt'] + f'\n\n---\nKNOWLEDGE BASE:\n{kb_text[:6000]}\n---'
+    else:
+        system_content = agent['system_prompt']
+
+    # ── Inject visitor memory ──
+    if session_id and session_id != 'dashboard-test':
+        mem = db.execute(
+            'SELECT summary, message_count FROM session_memory WHERE agent_id=? AND session_id=?',
+            (agent_id, session_id)
+        ).fetchone()
+        if mem and mem['summary']:
+            system_content += f'\n\n---\nVISITOR MEMORY (returning user):\n{mem["summary"]}\n---'
+
+    messages = [{'role': 'system', 'content': system_content}]
+    for h in history[-10:]:
         if h.get('role') in ('user', 'assistant') and h.get('content'):
             messages.append({'role': h['role'], 'content': h['content'][:1000]})
     messages.append({'role': 'user', 'content': user_msg})
@@ -570,6 +615,41 @@ def chat(agent_id):
     db.execute('INSERT INTO messages(agent_id,role,content,session_id) VALUES(?,?,?,?)',
                (agent_id, 'assistant', reply, session_id))
     db.execute('UPDATE agents SET msg_count=msg_count+1 WHERE id=?', (agent_id,))
+
+    # ── Update visitor memory ──
+    if session_id and session_id != 'dashboard-test' and len(session_id) > 4:
+        existing_mem = db.execute(
+            'SELECT id, message_count, summary FROM session_memory WHERE agent_id=? AND session_id=?',
+            (agent_id, session_id)
+        ).fetchone()
+        new_count = (existing_mem['message_count'] if existing_mem else 0) + 1
+        # Build a simple rolling summary every 5 exchanges
+        summary = existing_mem['summary'] if existing_mem else ''
+        if new_count % 5 == 0 or not summary:
+            recent_msgs = db.execute(
+                'SELECT role, content FROM messages WHERE agent_id=? AND session_id=? ORDER BY ts DESC LIMIT 10',
+                (agent_id, session_id)
+            ).fetchall()
+            if recent_msgs:
+                convo = '\n'.join(f"{m['role'].upper()}: {m['content'][:200]}" for m in reversed(recent_msgs))
+                summary_prompt = [
+                    {'role': 'system', 'content': 'Summarize this conversation in 2-3 sentences. Focus on what the visitor asked about and any important details like their name, needs, or preferences. Be concise.'},
+                    {'role': 'user', 'content': convo}
+                ]
+                new_summary = call_openrouter(summary_prompt, model, agent['api_key'])
+                if not new_summary.startswith('⚠️'):
+                    summary = new_summary
+        if existing_mem:
+            db.execute(
+                'UPDATE session_memory SET summary=?, message_count=?, last_seen=datetime(\'now\') WHERE id=?',
+                (summary, new_count, existing_mem['id'])
+            )
+        else:
+            db.execute(
+                'INSERT INTO session_memory(agent_id, session_id, summary, message_count) VALUES(?,?,?,?)',
+                (agent_id, session_id, summary, new_count)
+            )
+
     db.commit()
 
     return jsonify({'reply': reply})
@@ -584,6 +664,170 @@ def preview(agent_id):
         flash('Agent not found.', 'error')
         return redirect(url_for('index'))
     return render_template('preview.html', agent=dict(agent))
+
+# ── Knowledge Base ──────────────────────────────────────────────────────────────
+
+def agent_owned(agent_id):
+    """Return agent row if it belongs to logged-in user, else None."""
+    db = get_db()
+    return db.execute(
+        'SELECT * FROM agents WHERE id=? AND user_id=?',
+        (agent_id, session['user_id'])
+    ).fetchone()
+
+@app.route('/agent/<agent_id>/kb')
+@login_required
+def kb_page(agent_id):
+    agent = agent_owned(agent_id)
+    if not agent:
+        flash('Agent not found.', 'error')
+        return redirect(url_for('dashboard'))
+    db = get_db()
+    entries = db.execute(
+        'SELECT * FROM knowledge_base WHERE agent_id=? ORDER BY created DESC',
+        (agent_id,)
+    ).fetchall()
+    memories = db.execute(
+        'SELECT * FROM session_memory WHERE agent_id=? ORDER BY last_seen DESC',
+        (agent_id,)
+    ).fetchall()
+    total_chars = sum(len(e['content']) for e in entries)
+    return render_template('knowledge_base.html',
+        agent=agent, entries=entries, memories=memories,
+        total_chars=total_chars, memory_count=len(memories))
+
+@app.route('/agent/<agent_id>/kb/add', methods=['POST'])
+@login_required
+def kb_add(agent_id):
+    agent = agent_owned(agent_id)
+    if not agent:
+        flash('Agent not found.', 'error')
+        return redirect(url_for('dashboard'))
+
+    kb_type = request.form.get('type', 'text')
+    title   = request.form.get('title', '').strip()[:200]
+    db = get_db()
+
+    if kb_type == 'text':
+        content = request.form.get('content', '').strip()
+        if not content:
+            flash('Content cannot be empty.', 'error')
+            return redirect(url_for('kb_page', agent_id=agent_id))
+        content = content[:10000]
+        db.execute(
+            'INSERT INTO knowledge_base(agent_id,type,title,content,source) VALUES(?,?,?,?,?)',
+            (agent_id, 'text', title, content, '')
+        )
+        db.commit()
+        flash('Knowledge added! ✅', 'success')
+
+    elif kb_type == 'url':
+        url = request.form.get('url', '').strip()
+        if not url:
+            flash('URL is required.', 'error')
+            return redirect(url_for('kb_page', agent_id=agent_id))
+        try:
+            req = urllib.request.Request(
+                url,
+                headers={'User-Agent': 'Mozilla/5.0 (compatible; AlexanderAI-KB-Scraper/1.0)'}
+            )
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                raw = resp.read()
+            # Simple HTML stripping
+            import re
+            html = raw.decode('utf-8', errors='replace')
+            # Remove scripts, styles, tags
+            html = re.sub(r'<script[^>]*>.*?</script>', ' ', html, flags=re.DOTALL | re.IGNORECASE)
+            html = re.sub(r'<style[^>]*>.*?</style>', ' ', html, flags=re.DOTALL | re.IGNORECASE)
+            html = re.sub(r'<[^>]+>', ' ', html)
+            html = re.sub(r'&nbsp;', ' ', html)
+            html = re.sub(r'&amp;', '&', html)
+            html = re.sub(r'&lt;', '<', html)
+            html = re.sub(r'&gt;', '>', html)
+            html = re.sub(r'[ \t]+', ' ', html)
+            html = re.sub(r'\n{3,}', '\n\n', html)
+            content = html.strip()[:10000]
+            if not title:
+                title = url[:100]
+            db.execute(
+                'INSERT INTO knowledge_base(agent_id,type,title,content,source) VALUES(?,?,?,?,?)',
+                (agent_id, 'url', title, content, url)
+            )
+            db.commit()
+            flash(f'URL scraped and saved! ({len(content)} chars) ✅', 'success')
+        except Exception as e:
+            flash(f'Could not scrape URL: {str(e)[:200]}', 'error')
+
+    elif kb_type == 'file':
+        f = request.files.get('file')
+        if not f or not f.filename:
+            flash('No file selected.', 'error')
+            return redirect(url_for('kb_page', agent_id=agent_id))
+        if not f.filename.lower().endswith('.txt'):
+            flash('Only .txt files are supported.', 'error')
+            return redirect(url_for('kb_page', agent_id=agent_id))
+        content = f.read(512 * 1024).decode('utf-8', errors='replace').strip()[:10000]
+        if not content:
+            flash('File appears to be empty.', 'error')
+            return redirect(url_for('kb_page', agent_id=agent_id))
+        if not title:
+            title = f.filename
+        db.execute(
+            'INSERT INTO knowledge_base(agent_id,type,title,content,source) VALUES(?,?,?,?,?)',
+            (agent_id, 'file', title, content, f.filename)
+        )
+        db.commit()
+        flash(f'File uploaded! ({len(content)} chars) ✅', 'success')
+
+    return redirect(url_for('kb_page', agent_id=agent_id))
+
+@app.route('/agent/<agent_id>/kb/delete/<int:entry_id>', methods=['POST'])
+@login_required
+def kb_delete(agent_id, entry_id):
+    agent = agent_owned(agent_id)
+    if not agent:
+        return redirect(url_for('dashboard'))
+    db = get_db()
+    db.execute('DELETE FROM knowledge_base WHERE id=? AND agent_id=?', (entry_id, agent_id))
+    db.commit()
+    flash('Entry deleted.', 'success')
+    return redirect(url_for('kb_page', agent_id=agent_id))
+
+@app.route('/agent/<agent_id>/kb/clear', methods=['POST'])
+@login_required
+def kb_clear(agent_id):
+    agent = agent_owned(agent_id)
+    if not agent:
+        return redirect(url_for('dashboard'))
+    db = get_db()
+    db.execute('DELETE FROM knowledge_base WHERE agent_id=?', (agent_id,))
+    db.commit()
+    flash('Knowledge base cleared.', 'success')
+    return redirect(url_for('kb_page', agent_id=agent_id))
+
+@app.route('/agent/<agent_id>/memory/delete/<int:mem_id>', methods=['POST'])
+@login_required
+def memory_delete(agent_id, mem_id):
+    agent = agent_owned(agent_id)
+    if not agent:
+        return redirect(url_for('dashboard'))
+    db = get_db()
+    db.execute('DELETE FROM session_memory WHERE id=? AND agent_id=?', (mem_id, agent_id))
+    db.commit()
+    flash('Memory deleted.', 'success')
+    return redirect(url_for('kb_page', agent_id=agent_id))
+
+@app.route('/agent/<agent_id>/memory/clear', methods=['POST'])
+@login_required
+def memory_clear(agent_id):
+    agent = agent_owned(agent_id)
+    if not agent:
+        return redirect(url_for('dashboard'))
+    db = get_db()
+    db.execute('DELETE FROM session_memory WHERE agent_id=?', (agent_id,))
+    db.commit()
+    flash('All visitor memories cleared.', 'success')
+    return redirect(url_for('kb_page', agent_id=agent_id))
 
 # ── Analytics ─────────────────────────────────────────────────────────────────
 
