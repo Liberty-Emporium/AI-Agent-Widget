@@ -1,4 +1,4 @@
-import os, sqlite3, secrets, hashlib, json, time, threading
+import os, sqlite3, secrets, hashlib, json, time, threading, datetime
 from functools import wraps
 from flask import (Flask, render_template, request, redirect, url_for,
                    session, flash, jsonify, g)
@@ -266,11 +266,15 @@ def signup():
     if request.method == 'POST':
         email    = request.form.get('email', '').strip().lower()
         password = request.form.get('password', '')
+        confirm  = request.form.get('confirm_password', '')
         if not email or not password:
             flash('Email and password required.', 'error')
             return render_template('signup.html')
         if len(password) < 8:
             flash('Password must be at least 8 characters.', 'error')
+            return render_template('signup.html')
+        if password != confirm:
+            flash('Passwords do not match.', 'error')
             return render_template('signup.html')
         db = get_db()
         if db.execute('SELECT id FROM users WHERE email=?', (email,)).fetchone():
@@ -311,6 +315,59 @@ def login():
 def logout():
     session.clear()
     return redirect(url_for('index'))
+
+# ── Password reset ────────────────────────────────────────────────────────────
+
+# In-memory token store: {token: {email, expires}}
+# For production, move this to the DB. Fine for now.
+_reset_tokens = {}
+
+@app.route('/forgot-password', methods=['GET', 'POST'])
+def forgot_password():
+    if request.method == 'POST':
+        email = request.form.get('email', '').strip().lower()
+        db = get_db()
+        user = db.execute('SELECT id FROM users WHERE email=?', (email,)).fetchone()
+        # Always show success — don't reveal if email exists (security)
+        if user:
+            token = secrets.token_urlsafe(32)
+            _reset_tokens[token] = {
+                'email': email,
+                'expires': datetime.datetime.utcnow() + datetime.timedelta(hours=1)
+            }
+            reset_url = f"{request.host_url.rstrip('/')}/reset-password/{token}"
+            app.logger.info(f'Password reset requested for {email}: {reset_url}')
+            # TODO: send email when SMTP is configured
+            # For now, flash the link so Jay can test (remove in production)
+            flash(f'Reset link (dev mode — add SMTP to send email): {reset_url}', 'success')
+        else:
+            flash('If that email exists, a reset link has been sent.', 'success')
+        return redirect(url_for('forgot_password'))
+    return render_template('forgot_password.html')
+
+@app.route('/reset-password/<token>', methods=['GET', 'POST'])
+def reset_password(token):
+    data = _reset_tokens.get(token)
+    if not data or datetime.datetime.utcnow() > data['expires']:
+        flash('This reset link is invalid or has expired.', 'error')
+        return redirect(url_for('forgot_password'))
+    if request.method == 'POST':
+        password = request.form.get('password', '')
+        confirm  = request.form.get('confirm_password', '')
+        if len(password) < 8:
+            flash('Password must be at least 8 characters.', 'error')
+            return render_template('reset_password.html', token=token)
+        if password != confirm:
+            flash('Passwords do not match.', 'error')
+            return render_template('reset_password.html', token=token)
+        db = get_db()
+        db.execute('UPDATE users SET password=? WHERE email=?',
+                   (hash_pw(password), data['email']))
+        db.commit()
+        del _reset_tokens[token]
+        flash('Password reset successfully! Please sign in.', 'success')
+        return redirect(url_for('login'))
+    return render_template('reset_password.html', token=token)
 
 @app.route('/change-password', methods=['GET', 'POST'])
 @login_required
