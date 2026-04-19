@@ -80,6 +80,21 @@
           </div>
           <div style="font-weight:700;font-size:0.93rem;margin-bottom:4px;">{{ t.subject }}</div>
           <div style="font-size:0.82rem;color:#94a3b8;line-height:1.5;">{{ t.description[:300] }}{{ '…' if t.description|length > 300 else '' }}</div>
+          {% if t.hosting_login_url %}
+          <div style="margin-top:10px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+            <a href="{{ t.hosting_login_url }}" target="_blank" class="btn btn-primary btn-sm">
+              🔐 Open Hosting Login
+            </a>
+            {% if t.website_url %}
+            <a href="{{ t.website_url }}" target="_blank" class="btn btn-outline btn-sm">
+              🌐 View Website
+            </a>
+            {% endif %}
+            {% if t.hosting_provider %}
+            <span style="font-size:0.78rem;color:#6b7280;">🏠 {{ t.hosting_provider }}</span>
+            {% endif %}
+          </div>
+          {% endif %}
           {% if t.admin_reply %}
           <div style="margin-top:8px;padding:8px 12px;background:rgba(16,185,129,0.08);border-radius:6px;font-size:0.8rem;color:#6ee7b7;">
             <strong>Your reply:</strong> {{ t.admin_reply[:150] }}{{ '…' if t.admin_reply|length > 150 else '' }}

@@ -104,16 +104,20 @@ def init_db():
         );
         CREATE INDEX IF NOT EXISTS idx_memory_agent_session ON session_memory(agent_id, session_id);
         CREATE TABLE IF NOT EXISTS tickets (
-            id          INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id     INTEGER NOT NULL,
-            priority    TEXT NOT NULL DEFAULT 'normal',
-            subject     TEXT NOT NULL,
-            description TEXT NOT NULL,
-            status      TEXT NOT NULL DEFAULT 'open',
-            admin_reply TEXT DEFAULT '',
-            replied_at  TEXT DEFAULT NULL,
-            created     TEXT DEFAULT (datetime('now')),
-            updated     TEXT DEFAULT (datetime('now')),
+            id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id            INTEGER NOT NULL,
+            priority           TEXT NOT NULL DEFAULT 'normal',
+            subject            TEXT NOT NULL,
+            description        TEXT NOT NULL,
+            status             TEXT NOT NULL DEFAULT 'open',
+            admin_reply        TEXT DEFAULT '',
+            replied_at         TEXT DEFAULT NULL,
+            hosting_login_url  TEXT DEFAULT '',
+            hosting_provider   TEXT DEFAULT '',
+            website_url        TEXT DEFAULT '',
+            install_notes      TEXT DEFAULT '',
+            created            TEXT DEFAULT (datetime('now')),
+            updated            TEXT DEFAULT (datetime('now')),
             FOREIGN KEY(user_id) REFERENCES users(id)
         );
         CREATE INDEX IF NOT EXISTS idx_tickets_user ON tickets(user_id);
@@ -969,9 +973,65 @@ def billing_checkout(plan):
         return redirect(url_for('pricing'))
 
 @app.route('/billing/installation-success')
+@login_required
 def billing_installation_success():
-    flash('🎉 Payment received! We\'ll install your agent within 24 hours. Check your tickets for updates.', 'success')
+    # Find the most recent installation ticket for this user
+    db = get_db()
+    ticket = db.execute(
+        "SELECT id FROM tickets WHERE user_id=? AND subject LIKE 'Installation Service%' ORDER BY created DESC LIMIT 1",
+        (session['user_id'],)
+    ).fetchone()
+    ticket_id = ticket['id'] if ticket else None
+    flash('🎉 Payment received! Please fill in your website details below so we can get started.', 'success')
+    return render_template('installation_form.html', ticket_id=ticket_id)
+
+
+@app.route('/billing/installation-details', methods=['POST'])
+@login_required
+def billing_installation_details():
+    ticket_id         = request.form.get('ticket_id')
+    website_url       = request.form.get('website_url', '').strip()[:500]
+    hosting_login_url = request.form.get('hosting_login_url', '').strip()[:500]
+    hosting_provider  = request.form.get('hosting_provider', '').strip()[:100]
+    notes             = request.form.get('notes', '').strip()[:1000]
+
+    db = get_db()
+    if ticket_id:
+        db.execute(
+            """UPDATE tickets SET
+               website_url=?, hosting_login_url=?, hosting_provider=?, install_notes=?,
+               description = description || '\n\n--- INSTALLATION DETAILS ---\nWebsite: ' || ? || '\nHosting Login: ' || ? || '\nProvider: ' || ? || '\nNotes: ' || ?,
+               updated=datetime('now')
+               WHERE id=? AND user_id=?""",
+            (website_url, hosting_login_url, hosting_provider, notes,
+             website_url, hosting_login_url, hosting_provider, notes,
+             ticket_id, session['user_id'])
+        )
+    db.commit()
+    flash('✅ Details saved! We\'ll have your agent installed within 24 hours.', 'success')
     return redirect(url_for('tickets_page'))
+
+
+def migrate_ticket_install_columns():
+    """Add installation columns to tickets table if they don't exist."""
+    try:
+        db = sqlite3.connect(DB_PATH)
+        for col, defn in [
+            ('hosting_login_url', "TEXT DEFAULT ''"),
+            ('hosting_provider',  "TEXT DEFAULT ''"),
+            ('website_url',       "TEXT DEFAULT ''"),
+            ('install_notes',     "TEXT DEFAULT ''"),
+        ]:
+            try:
+                db.execute(f'ALTER TABLE tickets ADD COLUMN {col} {defn}')
+            except Exception:
+                pass
+        db.commit()
+        db.close()
+    except Exception as e:
+        app.logger.error(f'Ticket migration error: {e}')
+
+migrate_ticket_install_columns()
 
 @app.route('/billing/success')
 def billing_success():

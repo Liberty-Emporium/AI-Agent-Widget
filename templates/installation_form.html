@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block title %}Installation Details — Alexander AI Agent{% endblock %}
+{% block content %}
+<div class="container-sm" style="padding-top:3rem;">
+  <div class="card">
+    <div style="text-align:center;margin-bottom:1.5rem;">
+      <div style="font-size:2.5rem;margin-bottom:8px;">🛠️</div>
+      <h1 style="font-size:1.4rem;font-weight:800;margin-bottom:6px;">Almost there!</h1>
+      <p style="color:#6b7280;font-size:0.9rem;">We need a few details to install your AI agent. We'll have it live within 24 hours.</p>
+    </div>
+
+    <form method="POST" action="/billing/installation-details">
+      <input type="hidden" name="ticket_id" value="{{ ticket_id }}">
+
+      <div class="form-group">
+        <label>Your Website URL</label>
+        <input type="url" name="website_url" placeholder="https://yourwebsite.com" required>
+        <p style="font-size:0.78rem;color:#6b7280;margin-top:4px;">The page(s) where you want the chat widget to appear.</p>
+      </div>
+
+      <div class="form-group">
+        <label>Hosting Login Page URL</label>
+        <input type="url" name="hosting_login_url" placeholder="https://cpanel.yourhost.com or https://www.wix.com/login" required>
+        <p style="font-size:0.78rem;color:#6b7280;margin-top:4px;">Where do you log in to edit your website? Examples below:</p>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:8px;">
+          {% set hosts = [
+            ('cPanel','https://yourdomain.com:2083'),
+            ('GoDaddy','https://sso.godaddy.com'),
+            ('Wix','https://manage.wix.com'),
+            ('Squarespace','https://account.squarespace.com'),
+            ('WordPress.com','https://wordpress.com/log-in'),
+            ('Shopify','https://accounts.shopify.com/store-login'),
+            ('Weebly','https://www.weebly.com/login'),
+            ('Hostinger','https://hpanel.hostinger.com'),
+          ] %}
+          {% for name, url in hosts %}
+          <button type="button" class="btn btn-outline btn-sm"
+                  style="justify-content:flex-start;font-size:0.78rem;"
+                  onclick="document.querySelector('[name=hosting_login_url]').value='{{ url }}'">
+            {{ name }}
+          </button>
+          {% endfor %}
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>Hosting Provider <span style="color:#6b7280;font-weight:400;">(optional)</span></label>
+        <input type="text" name="hosting_provider" placeholder="e.g. GoDaddy, Bluehost, Wix, Squarespace…">
+      </div>
+
+      <div class="form-group">
+        <label>Additional Notes <span style="color:#6b7280;font-weight:400;">(optional)</span></label>
+        <textarea name="notes" rows="3" placeholder="e.g. Add to all pages, or just the contact page. Anything else we should know." style="resize:vertical;" maxlength="1000"></textarea>
+      </div>
+
+      <div style="background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.2);border-radius:8px;padding:12px 14px;margin-bottom:1.25rem;font-size:0.83rem;color:#fbbf24;line-height:1.6;">
+        ⚠️ <strong>Security note:</strong> Do NOT put your password here. Our technician will contact you directly to get login credentials securely when we're ready to install.
+      </div>
+
+      <button type="submit" class="btn btn-primary" style="width:100%;justify-content:center;padding:11px;">Submit Installation Details →</button>
+    </form>
+  </div>
+</div>
+{% endblock %}
