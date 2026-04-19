@@ -55,7 +55,7 @@
 </head>
 <body>
 <nav>
-  <a href="/" class="nav-brand">🤖 Alexander <span>AI Agent</span></a>
+  <a href="{{ '/dashboard' if session.get('user_id') else '/' }}" class="nav-brand">🤖 Alexander <span>AI Agent</span></a>
   <div class="nav-links">
     <a href="/pricing">Pricing</a>
     {% if session.get('user_id') %}
