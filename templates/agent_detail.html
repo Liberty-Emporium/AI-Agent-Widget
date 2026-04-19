@@ -151,7 +151,11 @@
       <div class="embed-box" id="embedCode">
         &lt;script src="{{ base_url.replace('http://', 'https://') }}/widget/{{ agent.id }}.js"&gt;&lt;/script&gt;
       </div>
-      <button class="btn btn-outline btn-sm copy-btn" onclick="copyEmbed()">📋 Copy Embed Code</button>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">
+        <button class="btn btn-outline btn-sm copy-btn" onclick="copyEmbed()">📋 Copy Embed Code</button>
+        <a href="/billing/checkout/installation?agent_id={{ agent.id }}" class="btn btn-primary btn-sm">🛠️ Get It Installed — $90</a>
+      </div>
+      <p style="font-size:0.78rem;color:#6b7280;margin-top:8px;">Not a developer? We'll install it in your .html file for you — delivered in 24 hours.</p>
     </div>
 
     <div class="card">

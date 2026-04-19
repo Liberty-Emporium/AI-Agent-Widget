@@ -913,6 +913,7 @@ def run_stripe_migrations():
 run_stripe_migrations()
 
 # ── Stripe helpers ─────────────────────────────────────────────────────────
+STRIPE_PRICE_INSTALLATION = os.environ.get('STRIPE_PRICE_INSTALLATION', '')  # $90 one-time
 PLAN_PRICES = {'pro': STRIPE_PRICE_PRO, 'business': STRIPE_PRICE_BUSINESS}
 PLAN_HIERARCHY = {'free': 0, 'pro': 1, 'business': 2, 'admin': 9}
 
@@ -920,6 +921,34 @@ PLAN_HIERARCHY = {'free': 0, 'pro': 1, 'business': 2, 'admin': 9}
 def billing_checkout(plan):
     if 'user_id' not in session:
         return redirect(url_for('login'))
+
+    # ── One-time installation service ──
+    if plan == 'installation':
+        if not STRIPE_PRICE_INSTALLATION:
+            flash('Installation service not yet configured. Contact us directly at emporiumandthrift@gmail.com.', 'error')
+            return redirect(url_for('pricing'))
+        agent_id = request.args.get('agent_id', '')
+        try:
+            checkout = stripe.checkout.Session.create(
+                customer_email=session.get('email'),
+                payment_method_types=['card'],
+                line_items=[{'price': STRIPE_PRICE_INSTALLATION, 'quantity': 1}],
+                mode='payment',
+                success_url=request.host_url + 'billing/installation-success',
+                cancel_url=request.host_url + 'pricing',
+                metadata={
+                    'user_id': str(session['user_id']),
+                    'plan': 'installation',
+                    'agent_id': agent_id,
+                    'email': session.get('email', ''),
+                },
+            )
+            return redirect(checkout.url)
+        except Exception as e:
+            app.logger.error(f'Stripe installation checkout error: {e}')
+            flash('Payment error. Please try again.', 'error')
+            return redirect(url_for('pricing'))
+
     if plan not in PLAN_PRICES or not PLAN_PRICES[plan]:
         flash('Invalid plan or Stripe not configured.', 'error')
         return redirect(url_for('pricing'))
@@ -938,6 +967,11 @@ def billing_checkout(plan):
         app.logger.error(f'Stripe checkout error: {e}')
         flash('Payment error. Please try again.', 'error')
         return redirect(url_for('pricing'))
+
+@app.route('/billing/installation-success')
+def billing_installation_success():
+    flash('🎉 Payment received! We\'ll install your agent within 24 hours. Check your tickets for updates.', 'success')
+    return redirect(url_for('tickets_page'))
 
 @app.route('/billing/success')
 def billing_success():
@@ -983,11 +1017,24 @@ def _handle_stripe_event(event):
     db.row_factory = sqlite3.Row
     try:
         if etype == 'checkout.session.completed':
-            user_id = data['metadata'].get('user_id')
-            plan    = data['metadata'].get('plan', 'pro')
-            cus_id  = data.get('customer')
-            sub_id  = data.get('subscription')
-            if user_id:
+            user_id  = data['metadata'].get('user_id')
+            plan     = data['metadata'].get('plan', 'pro')
+            cus_id   = data.get('customer')
+            sub_id   = data.get('subscription')
+            agent_id = data['metadata'].get('agent_id', '')
+            email    = data['metadata'].get('email', '')
+
+            if plan == 'installation' and user_id:
+                # Auto-create a support ticket for the installation job
+                subject = f'Installation Service — {email}'
+                desc    = f'Customer purchased Done-For-You Installation ($90).\n\nEmail: {email}\nAgent ID: {agent_id or "not specified"}\n\nAction needed: Install embed code in their .html file and deliver within 24 hours.'
+                db.execute(
+                    "INSERT INTO tickets(user_id, priority, subject, description, status) VALUES(?,?,?,?,?)",
+                    (int(user_id), 'urgent', subject, desc, 'open')
+                )
+                db.commit()
+                app.logger.info(f'Installation ticket created for user {user_id}')
+            elif user_id:
                 db.execute(
                     'UPDATE users SET plan=?, plan_status=\'active\', stripe_customer_id=?, stripe_subscription_id=? WHERE id=?',
                     (plan, cus_id, sub_id, int(user_id))
