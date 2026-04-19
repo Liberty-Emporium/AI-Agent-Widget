@@ -1,0 +1,143 @@
+{% extends "base.html" %}
+{% block title %}Ticket Management — Admin{% endblock %}
+{% block extra_css %}
+<style>
+  .badge{display:inline-block;font-size:0.72rem;font-weight:700;padding:3px 10px;border-radius:20px;text-transform:uppercase;letter-spacing:.04em;}
+  .badge-emergency{background:rgba(239,68,68,0.2);color:#f87171;}
+  .badge-urgent{background:rgba(245,158,11,0.2);color:#fbbf24;}
+  .badge-normal{background:rgba(99,102,241,0.2);color:#818cf8;}
+  .badge-open{background:rgba(16,185,129,0.15);color:#10b981;}
+  .badge-in_progress{background:rgba(245,158,11,0.15);color:#fbbf24;}
+  .badge-resolved{background:rgba(107,114,128,0.15);color:#9ca3af;}
+  .badge-closed{background:rgba(107,114,128,0.1);color:#6b7280;}
+  .filter-bar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:1.5rem;}
+  .filter-btn{padding:6px 16px;border-radius:20px;border:1.5px solid rgba(255,255,255,0.1);background:none;color:#94a3b8;font-size:0.82rem;cursor:pointer;transition:all .15s;}
+  .filter-btn.active,.filter-btn:hover{border-color:#6366f1;color:#818cf8;background:rgba(99,102,241,0.1);}
+  .ticket-row{background:#111827;border:1px solid rgba(255,255,255,0.06);border-radius:10px;padding:1.1rem 1.25rem;margin-bottom:0.6rem;transition:border .15s;}
+  .ticket-row:hover{border-color:rgba(255,255,255,0.12);}
+  .ticket-row.priority-emergency{border-left:3px solid #ef4444;}
+  .ticket-row.priority-urgent{border-left:3px solid #f59e0b;}
+  .ticket-row.priority-normal{border-left:3px solid #6366f1;}
+  .reply-form{display:none;margin-top:1rem;padding-top:1rem;border-top:1px solid rgba(255,255,255,0.06);}
+  .reply-form.open{display:block;}
+  .stat-cards{display:grid;grid-template-columns:repeat(4,1fr);gap:1rem;margin-bottom:1.5rem;}
+  .stat-card{background:#111827;border:1px solid rgba(255,255,255,0.08);border-radius:10px;padding:1rem;text-align:center;}
+  .stat-val{font-size:1.6rem;font-weight:800;color:#6366f1;}
+  .stat-val.red{color:#f87171;}
+  .stat-val.yellow{color:#fbbf24;}
+  .stat-label{font-size:0.75rem;color:#6b7280;margin-top:3px;}
+</style>
+{% endblock %}
+{% block content %}
+<div class="container">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.5rem;">
+    <h1 style="font-size:1.4rem;font-weight:800;">🎫 Ticket Management</h1>
+    <a href="/admin" class="btn btn-outline btn-sm">← Admin Panel</a>
+  </div>
+
+  <!-- Stats -->
+  <div class="stat-cards">
+    <div class="stat-card">
+      <div class="stat-val">{{ stats.total }}</div>
+      <div class="stat-label">Total Tickets</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-val">{{ stats.open }}</div>
+      <div class="stat-label">Open</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-val red">{{ stats.emergency }}</div>
+      <div class="stat-label">🚨 Emergency</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-val yellow">{{ stats.urgent }}</div>
+      <div class="stat-label">⚡ Urgent</div>
+    </div>
+  </div>
+
+  <!-- Filters -->
+  <div class="filter-bar">
+    <button class="filter-btn active" onclick="filterTickets('all', this)">All</button>
+    <button class="filter-btn" onclick="filterTickets('emergency', this)">🚨 Emergency</button>
+    <button class="filter-btn" onclick="filterTickets('urgent', this)">⚡ Urgent</button>
+    <button class="filter-btn" onclick="filterTickets('normal', this)">📋 Normal</button>
+    <button class="filter-btn" onclick="filterTickets('open', this)">Open</button>
+    <button class="filter-btn" onclick="filterTickets('in_progress', this)">In Progress</button>
+    <button class="filter-btn" onclick="filterTickets('resolved', this)">Resolved</button>
+  </div>
+
+  <!-- Tickets -->
+  {% if tickets %}
+    {% for t in tickets %}
+    <div class="ticket-row priority-{{ t.priority }}" data-priority="{{ t.priority }}" data-status="{{ t.status }}">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:1rem;flex-wrap:wrap;">
+        <div style="flex:1;min-width:0;">
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px;">
+            <span style="font-size:0.78rem;color:#4b5563;font-weight:600;">#{{ t.id }}</span>
+            <span class="badge badge-{{ t.priority }}">{{ '🚨' if t.priority == 'emergency' else ('⚡' if t.priority == 'urgent' else '📋') }} {{ t.priority }}</span>
+            <span class="badge badge-{{ t.status }}">{{ t.status.replace('_',' ') }}</span>
+            <span style="font-size:0.78rem;color:#6b7280;">{{ t.user_email }}</span>
+          </div>
+          <div style="font-weight:700;font-size:0.93rem;margin-bottom:4px;">{{ t.subject }}</div>
+          <div style="font-size:0.82rem;color:#94a3b8;line-height:1.5;">{{ t.description[:300] }}{{ '…' if t.description|length > 300 else '' }}</div>
+          {% if t.admin_reply %}
+          <div style="margin-top:8px;padding:8px 12px;background:rgba(16,185,129,0.08);border-radius:6px;font-size:0.8rem;color:#6ee7b7;">
+            <strong>Your reply:</strong> {{ t.admin_reply[:150] }}{{ '…' if t.admin_reply|length > 150 else '' }}
+          </div>
+          {% endif %}
+        </div>
+        <div style="text-align:right;flex-shrink:0;">
+          <div style="font-size:0.75rem;color:#4b5563;">{{ t.created[:16] }}</div>
+          <button class="btn btn-outline btn-sm" style="margin-top:8px;"
+                  onclick="toggleReply({{ t.id }})">✏️ Reply & Update</button>
+        </div>
+      </div>
+
+      <!-- Reply form -->
+      <div class="reply-form" id="reply-{{ t.id }}">
+        <form method="POST" action="/admin/tickets/{{ t.id }}/reply">
+          <div class="form-group" style="margin-bottom:10px;">
+            <label style="font-size:0.8rem;">Reply to customer</label>
+            <textarea name="admin_reply" rows="3" placeholder="Your response to the customer…" style="resize:vertical;">{{ t.admin_reply or '' }}</textarea>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+            <div class="form-group" style="margin-bottom:0;flex:1;min-width:160px;">
+              <select name="status">
+                <option value="open" {{ 'selected' if t.status == 'open' }}>Open</option>
+                <option value="in_progress" {{ 'selected' if t.status == 'in_progress' }}>In Progress</option>
+                <option value="resolved" {{ 'selected' if t.status == 'resolved' }}>Resolved</option>
+                <option value="closed" {{ 'selected' if t.status == 'closed' }}>Closed</option>
+              </select>
+            </div>
+            <button type="submit" class="btn btn-primary btn-sm">Save & Notify Customer</button>
+            <button type="button" class="btn btn-outline btn-sm" onclick="toggleReply({{ t.id }})">Cancel</button>
+          </div>
+        </form>
+      </div>
+    </div>
+    {% endfor %}
+  {% else %}
+  <div style="text-align:center;padding:3rem;color:#4b5563;">
+    <div style="font-size:3rem;margin-bottom:1rem;">🎉</div>
+    <div style="font-weight:600;">No tickets yet!</div>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}
+{% block extra_js %}
+<script>
+function toggleReply(id){
+  var f = document.getElementById('reply-'+id);
+  f.classList.toggle('open');
+}
+function filterTickets(filter, btn){
+  document.querySelectorAll('.filter-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  document.querySelectorAll('.ticket-row').forEach(function(row){
+    if(filter === 'all'){row.style.display='';return;}
+    var p = row.dataset.priority, s = row.dataset.status;
+    row.style.display = (p===filter || s===filter) ? '' : 'none';
+  });
+}
+</script>
+{% endblock %}

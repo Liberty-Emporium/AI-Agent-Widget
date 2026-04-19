@@ -103,6 +103,21 @@ def init_db():
             FOREIGN KEY(agent_id) REFERENCES agents(id)
         );
         CREATE INDEX IF NOT EXISTS idx_memory_agent_session ON session_memory(agent_id, session_id);
+        CREATE TABLE IF NOT EXISTS tickets (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id     INTEGER NOT NULL,
+            priority    TEXT NOT NULL DEFAULT 'normal',
+            subject     TEXT NOT NULL,
+            description TEXT NOT NULL,
+            status      TEXT NOT NULL DEFAULT 'open',
+            admin_reply TEXT DEFAULT '',
+            replied_at  TEXT DEFAULT NULL,
+            created     TEXT DEFAULT (datetime('now')),
+            updated     TEXT DEFAULT (datetime('now')),
+            FOREIGN KEY(user_id) REFERENCES users(id)
+        );
+        CREATE INDEX IF NOT EXISTS idx_tickets_user ON tickets(user_id);
+        CREATE INDEX IF NOT EXISTS idx_tickets_status ON tickets(status);
     ''')
     db.commit()
     db.close()
@@ -850,7 +865,7 @@ def agent_analytics(agent_id):
 
 # ── Admin bootstrap ───────────────────────────────────────────────────────
 
-ADMIN_EMAIL = os.environ.get('ADMIN_EMAIL', 'emporiumandthrift@gmail.com')
+ADMIN_EMAIL = os.environ.get('ADMIN_EMAIL', 'alexanderjay70@gmail.com')
 
 def bootstrap_admin():
     """Ensure the admin user exists and has admin + pro plan."""
@@ -1013,6 +1028,77 @@ def admin_required(f):
             return redirect(url_for('dashboard'))
         return f(*args, **kwargs)
     return decorated
+
+
+@app.route('/tickets')
+@login_required
+def tickets_page():
+    db = get_db()
+    t_list = db.execute(
+        "SELECT * FROM tickets WHERE user_id=? ORDER BY CASE priority WHEN 'emergency' THEN 1 WHEN 'urgent' THEN 2 ELSE 3 END, created DESC",
+        (session['user_id'],)
+    ).fetchall()
+    return render_template('tickets.html', tickets=t_list)
+
+
+@app.route('/tickets/new', methods=['POST'])
+@login_required
+def tickets_new():
+    priority    = request.form.get('priority', 'normal')
+    subject     = request.form.get('subject', '').strip()[:200]
+    description = request.form.get('description', '').strip()[:5000]
+    if priority not in ('normal', 'urgent', 'emergency'):
+        priority = 'normal'
+    if not subject or not description:
+        flash('Subject and description are required.', 'error')
+        return redirect(url_for('tickets_page'))
+    db = get_db()
+    db.execute(
+        'INSERT INTO tickets(user_id, priority, subject, description) VALUES(?,?,?,?)',
+        (session['user_id'], priority, subject, description)
+    )
+    db.commit()
+    sla = {'emergency': '1 hour', 'urgent': '4 hours', 'normal': '24 hours'}[priority]
+    flash(f"Ticket submitted! We'll respond within {sla}.", 'success')
+    return redirect(url_for('tickets_page'))
+
+
+@app.route('/admin/tickets')
+@admin_required
+def admin_tickets():
+    db = get_db()
+    t_list = db.execute('''
+        SELECT t.*, u.email as user_email
+        FROM tickets t JOIN users u ON t.user_id = u.id
+        ORDER BY
+          CASE t.priority WHEN 'emergency' THEN 1 WHEN 'urgent' THEN 2 ELSE 3 END,
+          CASE t.status WHEN 'open' THEN 1 WHEN 'in_progress' THEN 2 WHEN 'resolved' THEN 3 ELSE 4 END,
+          t.created DESC
+    ''').fetchall()
+    stats = {
+        'total':     db.execute('SELECT COUNT(*) FROM tickets').fetchone()[0],
+        'open':      db.execute("SELECT COUNT(*) FROM tickets WHERE status='open'").fetchone()[0],
+        'emergency': db.execute("SELECT COUNT(*) FROM tickets WHERE priority='emergency' AND status NOT IN ('resolved','closed')").fetchone()[0],
+        'urgent':    db.execute("SELECT COUNT(*) FROM tickets WHERE priority='urgent' AND status NOT IN ('resolved','closed')").fetchone()[0],
+    }
+    return render_template('admin_tickets.html', tickets=t_list, stats=stats)
+
+
+@app.route('/admin/tickets/<int:ticket_id>/reply', methods=['POST'])
+@admin_required
+def admin_ticket_reply(ticket_id):
+    admin_reply = request.form.get('admin_reply', '').strip()
+    status      = request.form.get('status', 'open')
+    if status not in ('open', 'in_progress', 'resolved', 'closed'):
+        status = 'open'
+    db = get_db()
+    db.execute(
+        "UPDATE tickets SET admin_reply=?, status=?, replied_at=datetime('now'), updated=datetime('now') WHERE id=?",
+        (admin_reply, status, ticket_id)
+    )
+    db.commit()
+    flash('Ticket updated.', 'success')
+    return redirect(url_for('admin_tickets'))
 
 # ── Admin panel ───────────────────────────────────────────────────────────
 
