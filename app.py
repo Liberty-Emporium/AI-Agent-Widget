@@ -1922,44 +1922,5 @@ def admin_train_chat(agent_id):
     reply = call_openrouter(messages, test_model, agent['api_key'])
     return jsonify({'reply': reply})
 
-# ── One-time Willie actions reset (removes after first call) ─────────────────
-@app.route('/internal/reset-willie-actions/echo2026')
-def reset_willie_actions():
-    """One-time endpoint: wipes and reseeds Willie's 9 actions."""
-    WILLIE_ID = 'F5J8yYT6a6GrppjviN6p8w'
-    BASE      = 'https://billy-floods.up.railway.app'
-    TOKEN     = 'S7LroZDvJSqzJZ304leqwQcxToJXRwF597gszWWarq4'
-    AUTH      = {'Authorization': f'Bearer {TOKEN}'}
-
-    ACTIONS = [
-        {'name': 'get_dashboard',      'description': 'Get FloodClaim Pro dashboard summary — total claims, team size, recent activity.', 'method': 'GET',  'url': f'{BASE}/willie/api/dashboard',              'headers': AUTH, 'body': {}},
-        {'name': 'list_claims',        'description': 'List all flood damage claims in the system.',                                       'method': 'GET',  'url': f'{BASE}/willie/api/claims',                 'headers': AUTH, 'body': {}},
-        {'name': 'get_claim',          'description': 'Get full details for a specific claim by ID.',                                      'method': 'GET',  'url': f'{BASE}/willie/api/claims/{{claim_id}}',    'headers': AUTH, 'body': {}},
-        {'name': 'create_claim',       'description': 'Create a new flood damage claim.',                                                  'method': 'POST', 'url': f'{BASE}/willie/api/claims',                 'headers': AUTH, 'body': {'address': '{{address}}', 'owner_name': '{{owner_name}}', 'claim_date': '{{claim_date}}', 'notes': '{{notes}}'}},
-        {'name': 'update_claim_status','description': 'Update the status of a claim (e.g. open, in_progress, closed).',                   'method': 'POST', 'url': f'{BASE}/willie/api/claims/{{claim_id}}/status','headers': AUTH, 'body': {'status': '{{status}}'}},
-        {'name': 'add_room',           'description': 'Add a room to a claim for damage documentation.',                                   'method': 'POST', 'url': f'{BASE}/willie/api/claims/{{claim_id}}/rooms', 'headers': AUTH, 'body': {'room_name': '{{room_name}}', 'notes': '{{notes}}'}},
-        {'name': 'add_line_item',      'description': 'Add a cost line item to a claim room.',                                             'method': 'POST', 'url': f'{BASE}/willie/api/line-items',               'headers': AUTH, 'body': {'claim_id': '{{claim_id}}', 'room_id': '{{room_id}}', 'description': '{{description}}', 'quantity': '{{quantity}}', 'unit_price': '{{unit_price}}'}},
-        {'name': 'add_team_member',    'description': 'Add a new adjuster or team member to FloodClaim Pro.',                             'method': 'POST', 'url': f'{BASE}/willie/api/team',                     'headers': AUTH, 'body': {'name': '{{name}}', 'email': '{{email}}', 'role': '{{role}}', 'password': '{{password}}'}},
-        {'name': 'list_team',          'description': 'List all team members and adjusters.',                                              'method': 'GET',  'url': f'{BASE}/willie/api/team',                     'headers': AUTH, 'body': {}},
-    ]
-
-    db = get_db()
-    agent = db.execute('SELECT id FROM agents WHERE id=?', (WILLIE_ID,)).fetchone()
-    if not agent:
-        return jsonify({'ok': False, 'error': 'Willie agent not found'}), 404
-
-    # Wipe existing actions
-    db.execute('DELETE FROM agent_actions WHERE agent_id=?', (WILLIE_ID,))
-
-    # Insert fresh
-    for a in ACTIONS:
-        db.execute(
-            'INSERT INTO agent_actions (agent_id,name,description,method,url,headers_json,body_template) VALUES (?,?,?,?,?,?,?)',
-            (WILLIE_ID, a['name'], a['description'], a['method'], a['url'],
-             json.dumps(a['headers']), json.dumps(a['body'])))
-    db.commit()
-    return jsonify({'ok': True, 'message': f'Willie\'s actions reset — {len(ACTIONS)} actions loaded.', 'actions': [a['name'] for a in ACTIONS]})
-
-
 if __name__ == '__main__':
     app.run(debug=True, port=5000)
