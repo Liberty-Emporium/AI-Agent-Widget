@@ -123,11 +123,11 @@
       <div class="form-row" style="margin-bottom:1rem;">
         <div class="form-group" style="margin:0">
           <label>Headers JSON <span style="color:#4b5563;font-weight:400;font-size:.78rem;">(optional override)</span></label>
-          <textarea name="headers_json" class="code-area" rows="3" placeholder='{"X-Agent-Key": "your-key"}'>{}</textarea>
+          <textarea name="headers_json" id="f_headers" class="code-area" rows="3" placeholder='{"X-Agent-Key": "your-key"}'>{}</textarea>
         </div>
         <div class="form-group" style="margin:0">
           <label>Body Template JSON <span style="color:#4b5563;font-weight:400;font-size:.78rem;">(params auto-merged)</span></label>
-          <textarea name="body_template" class="code-area" rows="3" placeholder='{"client_name": "{client_name}", "flood_date": "{flood_date}"}'>{}</textarea>
+          <textarea name="body_template" id="f_body" class="code-area" rows="3" placeholder='{"client_name": "{client_name}", "flood_date": "{flood_date}"}'>{}</textarea>
         </div>
       </div>
 
@@ -311,12 +311,12 @@ function fillPreset(idx) {
 }
 
 function fillAction(name, method, desc, url, headers, body) {
-  document.querySelector('[name=name]').value = name;
-  document.querySelector('[name=method]').value = method;
+  document.querySelector('[name=name]').value        = name;
+  document.querySelector('[name=method]').value      = method;
   document.querySelector('[name=description]').value = desc;
-  document.querySelector('[name=url]').value = url;
-  document.querySelector('[name=headers_json]').value = headers;
-  document.querySelector('[name=body_template]').value = body;
+  document.querySelector('[name=url]').value         = url;
+  document.getElementById('f_headers').value         = headers;
+  document.getElementById('f_body').value            = body;
   document.querySelector('[name=name]').scrollIntoView({behavior:'smooth', block:'center'});
 }
 
