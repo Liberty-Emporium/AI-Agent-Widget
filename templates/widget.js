@@ -9,26 +9,63 @@
   var AVATAR    = '{{ avatar }}';
   var NAME      = '{{ name | e }}';
   var TAGLINE   = '{{ tagline | e }}';
-  // ── Persistent state across page navigations ──
-  var STORAGE_KEY  = 'aai_state_' + AGENT_ID;
-  var savedState   = {};
-  try { savedState = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}'); } catch(e) {}
 
-  var history   = savedState.history   || [];
-  var sessionId = savedState.sessionId || ('sess_' + Math.random().toString(36).slice(2));
-  var open      = savedState.open      || false;
+  // ── Persistent state ──
+  var STORAGE_KEY = 'aai_' + AGENT_ID;
+  var CONVS_KEY   = 'aai_convs_' + AGENT_ID;
+  var saved = {};
+  try { saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}'); } catch(e) {}
+
+  var history      = saved.history   || [];
+  var sessionId    = saved.sessionId || ('sess_' + Math.random().toString(36).slice(2));
+  var open         = saved.open      || false;
+  var historyOpen  = false;
+  var currentTitle = saved.currentTitle || 'New Chat';
+
+  // conversations: [{id, title, ts, msgs:[]}]
+  var conversations = [];
+  try { conversations = JSON.parse(localStorage.getItem(CONVS_KEY) || '[]'); } catch(e) {}
+  var currentConvId = saved.currentConvId || null;
 
   function saveState() {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify({
-        open:      open,
-        sessionId: sessionId,
-        history:   history.slice(-30)
+        open: open, sessionId: sessionId,
+        history: history.slice(-40),
+        currentTitle: currentTitle,
+        currentConvId: currentConvId
       }));
     } catch(e) {}
   }
 
-  // ── Inject styles ──
+  function saveConversations() {
+    try { localStorage.setItem(CONVS_KEY, JSON.stringify(conversations.slice(-50))); } catch(e) {}
+  }
+
+  function flushCurrentConv() {
+    if (!history.length) return;
+    var title = currentTitle !== 'New Chat' ? currentTitle
+      : (history[0] ? history[0].content.slice(0,48) + (history[0].content.length>48?'…':'') : 'Chat');
+    if (currentConvId) {
+      var idx = conversations.findIndex(function(c){return c.id===currentConvId;});
+      if (idx > -1) {
+        conversations[idx].title = title;
+        conversations[idx].msgs  = history.slice(-40);
+        conversations[idx].ts    = Date.now();
+      } else {
+        conversations.unshift({id:currentConvId, title:title, msgs:history.slice(-40), ts:Date.now()});
+      }
+    } else {
+      var newId = 'c_' + Date.now();
+      currentConvId = newId;
+      conversations.unshift({id:newId, title:title, msgs:history.slice(-40), ts:Date.now()});
+    }
+    conversations.sort(function(a,b){return b.ts-a.ts;});
+    saveConversations();
+    saveState();
+  }
+
+  // ── Styles ──
   var style = document.createElement('style');
   style.textContent = `
     #aai-bubble {
@@ -36,80 +73,136 @@
       width:56px; height:56px; border-radius:50%;
       background:${COLOR}; color:#fff; font-size:26px;
       display:flex; align-items:center; justify-content:center;
-      cursor:pointer; box-shadow:0 4px 20px rgba(0,0,0,0.25);
-      border:none; transition:transform 0.2s, box-shadow 0.2s;
-      font-family:inherit;
+      cursor:pointer; box-shadow:0 4px 20px rgba(0,0,0,.25);
+      border:none; transition:transform .2s,box-shadow .2s; font-family:inherit;
     }
-    #aai-bubble:hover { transform:scale(1.08); box-shadow:0 6px 28px rgba(0,0,0,0.3); }
+    #aai-bubble:hover { transform:scale(1.08); box-shadow:0 6px 28px rgba(0,0,0,.3); }
+
     #aai-window {
       position:fixed; bottom:92px; right:24px; z-index:99998;
       width:360px; height:520px; max-height:calc(100vh - 120px);
       background:#fff; border-radius:16px;
-      box-shadow:0 8px 40px rgba(0,0,0,0.18);
-      display:none; flex-direction:column; overflow:hidden;
+      box-shadow:0 8px 40px rgba(0,0,0,.18);
+      display:none; overflow:hidden; position:fixed;
       font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
-      border:1px solid rgba(0,0,0,0.08);
+      border:1px solid rgba(0,0,0,.08);
     }
     #aai-window.open { display:flex; }
+
+    /* ── Inner layout: history panel + chat panel side by side ── */
+    #aai-inner {
+      display:flex; width:100%; height:100%; transition:transform .25s ease;
+    }
+
+    /* ── History panel (slides in from left) ── */
+    #aai-hist-panel {
+      width:220px; min-width:220px; height:100%; background:#f8f9fa;
+      border-right:1px solid #e5e7eb; display:flex; flex-direction:column;
+      overflow:hidden; transform:translateX(-220px); transition:transform .25s ease;
+      position:absolute; left:0; top:0; bottom:0; z-index:2;
+    }
+    #aai-window.hist-open #aai-hist-panel { transform:translateX(0); }
+    #aai-window.hist-open #aai-chat-panel { transform:translateX(220px); }
+    #aai-chat-panel { flex:1; display:flex; flex-direction:column; transition:transform .25s ease; width:100%; }
+
+    #aai-hist-header {
+      padding:12px 14px; border-bottom:1px solid #e5e7eb;
+      display:flex; align-items:center; justify-content:space-between; flex-shrink:0;
+    }
+    #aai-hist-header span { font-weight:700; font-size:13px; color:#374151; }
+    #aai-new-chat {
+      padding:3px 9px; background:${COLOR}; color:#fff; border:none;
+      border-radius:6px; font-size:11px; font-weight:700; cursor:pointer; font-family:inherit;
+    }
+    #aai-hist-list {
+      flex:1; overflow-y:auto; padding:6px;
+    }
+    #aai-hist-list::-webkit-scrollbar { width:3px; }
+    #aai-hist-list::-webkit-scrollbar-thumb { background:#d1d5db; border-radius:2px; }
+    .aai-conv-item {
+      padding:8px 10px; border-radius:8px; cursor:pointer;
+      margin-bottom:2px; border:1px solid transparent; transition:all .15s;
+      position:relative;
+    }
+    .aai-conv-item:hover { background:#fff; border-color:#e5e7eb; }
+    .aai-conv-item.active { background:#fff; border-color:${COLOR}40; }
+    .aai-conv-title {
+      font-size:12px; font-weight:600; color:#1f2937;
+      white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+      padding-right:18px;
+    }
+    .aai-conv-date { font-size:10px; color:#9ca3af; margin-top:2px; }
+    .aai-conv-del {
+      position:absolute; right:6px; top:50%; transform:translateY(-50%);
+      opacity:0; background:none; border:none; color:#ef4444;
+      cursor:pointer; font-size:11px; padding:2px 4px; border-radius:3px;
+    }
+    .aai-conv-item:hover .aai-conv-del { opacity:1; }
+    .aai-hist-empty { padding:20px 12px; text-align:center; color:#9ca3af; font-size:12px; line-height:1.6; }
+
+    /* ── Chat panel ── */
     #aai-header {
-      background:${COLOR}; color:#fff; padding:14px 16px;
+      background:${COLOR}; color:#fff; padding:12px 14px;
       display:flex; align-items:center; gap:10px; flex-shrink:0;
     }
-    #aai-header-avatar { font-size:24px; }
-    #aai-header-info { flex:1; }
-    #aai-header-name { font-weight:700; font-size:15px; line-height:1.2; }
-    #aai-header-tagline { font-size:11px; opacity:0.85; margin-top:1px; }
+    #aai-hist-btn {
+      background:rgba(255,255,255,.2); border:none; color:#fff;
+      width:28px; height:28px; border-radius:7px; cursor:pointer;
+      font-size:14px; display:flex; align-items:center; justify-content:center;
+      flex-shrink:0; transition:background .15s;
+    }
+    #aai-hist-btn:hover { background:rgba(255,255,255,.3); }
+    #aai-header-info { flex:1; min-width:0; }
+    #aai-header-name { font-weight:700; font-size:14px; line-height:1.2; }
+    #aai-header-tagline { font-size:10px; opacity:.85; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
     #aai-close {
-      background:none; border:none; color:#fff; font-size:20px;
-      cursor:pointer; padding:0; opacity:0.8; line-height:1;
+      background:none; border:none; color:#fff; font-size:18px;
+      cursor:pointer; padding:0; opacity:.8; line-height:1; flex-shrink:0;
     }
     #aai-close:hover { opacity:1; }
+
     #aai-msgs {
-      flex:1; overflow-y:auto; padding:16px; display:flex;
+      flex:1; overflow-y:auto; padding:14px; display:flex;
       flex-direction:column; gap:10px; background:#f8f9fa;
     }
+    #aai-msgs::-webkit-scrollbar { width:3px; }
+    #aai-msgs::-webkit-scrollbar-thumb { background:#d1d5db; border-radius:2px; }
     .aai-msg {
-      max-width:82%; padding:10px 13px; border-radius:14px;
-      font-size:14px; line-height:1.5; word-wrap:break-word;
+      max-width:84%; padding:9px 13px; border-radius:14px;
+      font-size:13.5px; line-height:1.5; word-wrap:break-word; white-space:pre-wrap;
     }
     .aai-msg.user {
-      align-self:flex-end; background:${COLOR}; color:#fff;
-      border-bottom-right-radius:4px;
+      align-self:flex-end; background:${COLOR}; color:#fff; border-bottom-right-radius:4px;
     }
     .aai-msg.bot {
       align-self:flex-start; background:#fff; color:#1a1a1a;
       border:1px solid #e5e7eb; border-bottom-left-radius:4px;
-      box-shadow:0 1px 3px rgba(0,0,0,0.06);
+      box-shadow:0 1px 3px rgba(0,0,0,.05);
     }
     .aai-msg.bot.typing { color:#9ca3af; font-style:italic; }
-    #aai-footer {
-      padding:12px; border-top:1px solid #e5e7eb;
-      background:#fff; flex-shrink:0;
-    }
-    #aai-form { display:flex; gap:8px; }
+
+    #aai-footer { padding:10px 12px; border-top:1px solid #e5e7eb; background:#fff; flex-shrink:0; }
+    #aai-form { display:flex; gap:7px; }
     #aai-input {
-      flex:1; padding:9px 13px; border-radius:22px;
-      border:1.5px solid #e5e7eb; font-size:14px; outline:none;
-      background:#f9fafb; transition:border 0.2s;
+      flex:1; padding:8px 12px; border-radius:20px;
+      border:1.5px solid #e5e7eb; font-size:13px; outline:none;
+      background:#f9fafb; transition:border .2s; font-family:inherit;
     }
     #aai-input:focus { border-color:${COLOR}; background:#fff; }
     #aai-send {
-      width:36px; height:36px; border-radius:50%;
-      background:${COLOR}; color:#fff; border:none;
-      cursor:pointer; font-size:16px; display:flex;
-      align-items:center; justify-content:center;
-      flex-shrink:0; transition:opacity 0.2s;
+      width:34px; height:34px; border-radius:50%; background:${COLOR};
+      color:#fff; border:none; cursor:pointer; font-size:15px;
+      display:flex; align-items:center; justify-content:center;
+      flex-shrink:0; transition:opacity .2s;
     }
-    #aai-send:hover { opacity:0.85; }
-    #aai-send:disabled { opacity:0.4; cursor:not-allowed; }
-    #aai-branding {
-      text-align:center; font-size:10px; color:#9ca3af;
-      padding:4px 0 8px; letter-spacing:0.02em;
-    }
+    #aai-send:hover { opacity:.85; }
+    #aai-send:disabled { opacity:.4; cursor:not-allowed; }
+    #aai-branding { text-align:center; font-size:10px; color:#9ca3af; padding:3px 0 6px; }
     #aai-branding a { color:${COLOR}; text-decoration:none; }
+
     @media(max-width:480px){
-      #aai-window { width:calc(100vw - 24px); right:12px; bottom:80px; }
-      #aai-bubble { bottom:16px; right:16px; }
+      #aai-window { width:calc(100vw - 20px); right:10px; bottom:78px; }
+      #aai-bubble { bottom:14px; right:14px; }
     }
   `;
   document.head.appendChild(style);
@@ -123,23 +216,36 @@
   var win = document.createElement('div');
   win.id = 'aai-window';
   win.setAttribute('role', 'dialog');
-  win.setAttribute('aria-label', NAME + ' chat');
   win.innerHTML = `
-    <div id="aai-header">
-      <span id="aai-header-avatar">${AVATAR}</span>
-      <div id="aai-header-info">
-        <div id="aai-header-name">${NAME}</div>
-        <div id="aai-header-tagline">${TAGLINE}</div>
+    <div id="aai-inner">
+      <!-- History panel -->
+      <div id="aai-hist-panel">
+        <div id="aai-hist-header">
+          <span>💬 History</span>
+          <button id="aai-new-chat">+ New</button>
+        </div>
+        <div id="aai-hist-list"></div>
       </div>
-      <button id="aai-close" aria-label="Close chat">✕</button>
-    </div>
-    <div id="aai-msgs"></div>
-    <div id="aai-footer">
-      <form id="aai-form">
-        <input id="aai-input" type="text" placeholder="Ask me anything..." autocomplete="off" maxlength="2000">
-        <button id="aai-send" type="submit" aria-label="Send">➤</button>
-      </form>
-      <div id="aai-branding">Powered by <a href="https://alexanderaiis.com" target="_blank">Alexander AI</a></div>
+
+      <!-- Chat panel -->
+      <div id="aai-chat-panel">
+        <div id="aai-header">
+          <button id="aai-hist-btn" title="Chat history">☰</button>
+          <div id="aai-header-info">
+            <div id="aai-header-name">${NAME}</div>
+            <div id="aai-header-tagline">${TAGLINE}</div>
+          </div>
+          <button id="aai-close" aria-label="Close">✕</button>
+        </div>
+        <div id="aai-msgs"></div>
+        <div id="aai-footer">
+          <form id="aai-form">
+            <input id="aai-input" type="text" placeholder="Ask me anything..." autocomplete="off" maxlength="2000">
+            <button id="aai-send" type="submit">➤</button>
+          </form>
+          <div id="aai-branding">Powered by <a href="https://alexanderaiis.com" target="_blank">Alexander AI</a></div>
+        </div>
+      </div>
     </div>
   `;
 
@@ -158,27 +264,103 @@
   }
 
   function setTyping(on) {
-    var existing = document.getElementById('aai-typing');
-    if (on && !existing) {
-      var el = addMsg('bot typing', NAME + ' is typing…');
-      el.id = 'aai-typing';
-    } else if (!on && existing) {
-      existing.remove();
-    }
+    var ex = document.getElementById('aai-typing');
+    if (on && !ex) { var el = addMsg('bot typing', NAME + ' is typing…'); el.id = 'aai-typing'; }
+    else if (!on && ex) ex.remove();
   }
 
-  // ── Restore chat history on page load ──
+  function tsLabel(ts) {
+    if (!ts) return '';
+    var d = new Date(ts), now = new Date(), diff = (now - d) / 86400000;
+    if (diff < 1) return 'Today';
+    if (diff < 2) return 'Yesterday';
+    return d.toLocaleDateString('en-US', {month:'short', day:'numeric'});
+  }
+
+  // ── History panel ──
+  function renderHistPanel() {
+    var list = document.getElementById('aai-hist-list');
+    if (!conversations.length) {
+      list.innerHTML = '<div class="aai-hist-empty">No past conversations yet.<br>Start chatting!</div>';
+      return;
+    }
+    list.innerHTML = '';
+    conversations.forEach(function(c) {
+      var item = document.createElement('div');
+      item.className = 'aai-conv-item' + (c.id === currentConvId ? ' active' : '');
+      item.innerHTML =
+        '<div class="aai-conv-title">' + c.title.replace(/</g,'&lt;') + '</div>' +
+        '<div class="aai-conv-date">' + tsLabel(c.ts) + '</div>' +
+        '<button class="aai-conv-del" title="Delete">✕</button>';
+      item.querySelector('.aai-conv-del').addEventListener('click', function(e) {
+        e.stopPropagation();
+        conversations = conversations.filter(function(x){return x.id!==c.id;});
+        saveConversations();
+        if (currentConvId === c.id) startNewChat();
+        renderHistPanel();
+      });
+      item.addEventListener('click', function() { loadConv(c.id); });
+      list.appendChild(item);
+    });
+  }
+
+  function loadConv(id) {
+    var conv = conversations.find(function(c){return c.id===id;});
+    if (!conv) return;
+    // Save current before switching
+    flushCurrentConv();
+    currentConvId = id;
+    history = (conv.msgs || []).slice();
+    currentTitle = conv.title;
+    sessionId = 'sess_' + id;
+    var msgs = document.getElementById('aai-msgs');
+    msgs.innerHTML = '';
+    history.forEach(function(m) { addMsg(m.role==='user'?'user':'bot', m.content); });
+    if (!history.length) addMsg('bot', 'Hi! ' + TAGLINE + ' How can I help you today?');
+    msgs.scrollTop = msgs.scrollHeight;
+    saveState();
+    renderHistPanel();
+    closeHistPanel();
+  }
+
+  function startNewChat() {
+    flushCurrentConv();
+    currentConvId = null;
+    currentTitle  = 'New Chat';
+    history       = [];
+    sessionId     = 'sess_' + Math.random().toString(36).slice(2);
+    var msgs = document.getElementById('aai-msgs');
+    msgs.innerHTML = '';
+    addMsg('bot', 'Hi! ' + TAGLINE + ' How can I help you today?');
+    saveState();
+    renderHistPanel();
+    closeHistPanel();
+    document.getElementById('aai-input').focus();
+  }
+
+  function toggleHistPanel() {
+    historyOpen = !historyOpen;
+    win.classList.toggle('hist-open', historyOpen);
+    if (historyOpen) renderHistPanel();
+  }
+
+  function closeHistPanel() {
+    historyOpen = false;
+    win.classList.remove('hist-open');
+  }
+
+  // ── Restore on load ──
   function restoreHistory() {
-    if (history.length === 0) {
+    var msgs = document.getElementById('aai-msgs');
+    if (!history.length) {
       addMsg('bot', 'Hi! ' + TAGLINE + ' How can I help you today?');
     } else {
-      history.forEach(function(m) {
-        addMsg(m.role === 'user' ? 'user' : 'bot', m.content);
-      });
+      history.forEach(function(m) { addMsg(m.role==='user'?'user':'bot', m.content); });
     }
+    msgs.scrollTop = msgs.scrollHeight;
   }
 
-  // ── Toggle ──
+  // ── Toggle chat open/close ──
   function toggleChat() {
     open = !open;
     win.classList.toggle('open', open);
@@ -188,20 +370,27 @@
       if (!msgs.querySelector('.aai-msg')) restoreHistory();
       msgs.scrollTop = msgs.scrollHeight;
       document.getElementById('aai-input').focus();
+    } else {
+      closeHistPanel();
+      flushCurrentConv();
     }
     saveState();
   }
 
   bubble.addEventListener('click', toggleChat);
   document.getElementById('aai-close').addEventListener('click', toggleChat);
+  document.getElementById('aai-hist-btn').addEventListener('click', toggleHistPanel);
+  document.getElementById('aai-new-chat').addEventListener('click', startNewChat);
 
-  // ── Auto-open if was open on last page ──
+  // ── Auto-open ──
   if (open) {
     win.classList.add('open');
     bubble.textContent = '✕';
     restoreHistory();
-    var msgs = document.getElementById('aai-msgs');
-    setTimeout(function() { msgs.scrollTop = msgs.scrollHeight; }, 50);
+    setTimeout(function() {
+      var msgs = document.getElementById('aai-msgs');
+      msgs.scrollTop = msgs.scrollHeight;
+    }, 50);
   }
 
   // ── Send message ──
@@ -212,9 +401,16 @@
     var text  = input.value.trim();
     if (!text) return;
 
+    closeHistPanel();
     input.value = '';
     addMsg('user', text);
-    history.push({role: 'user', content: text});
+    history.push({role:'user', content:text});
+
+    // Auto-title from first user message
+    if (history.filter(function(m){return m.role==='user';}).length === 1) {
+      currentTitle = text.slice(0, 48) + (text.length > 48 ? '…' : '');
+    }
+
     saveState();
     send.disabled = true;
     setTyping(true);
@@ -222,15 +418,15 @@
     fetch(BASE_URL + '/chat/' + AGENT_ID, {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({message: text, history: history, session_id: sessionId})
+      body: JSON.stringify({message:text, history:history.slice(-12), session_id:sessionId})
     })
     .then(function(r) { return r.json(); })
     .then(function(data) {
       setTyping(false);
       var reply = data.reply || data.error || 'Something went wrong.';
       addMsg('bot', reply);
-      history.push({role: 'assistant', content: reply});
-      if (history.length > 30) history = history.slice(-30);
+      history.push({role:'assistant', content:reply});
+      if (history.length > 40) history = history.slice(-40);
       saveState();
     })
     .catch(function() {
