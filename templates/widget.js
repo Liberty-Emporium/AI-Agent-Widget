@@ -9,9 +9,24 @@
   var AVATAR    = '{{ avatar }}';
   var NAME      = '{{ name | e }}';
   var TAGLINE   = '{{ tagline | e }}';
-  var history   = [];
-  var sessionId = 'sess_' + Math.random().toString(36).slice(2);
-  var open      = false;
+  // ── Persistent state across page navigations ──
+  var STORAGE_KEY  = 'aai_state_' + AGENT_ID;
+  var savedState   = {};
+  try { savedState = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}'); } catch(e) {}
+
+  var history   = savedState.history   || [];
+  var sessionId = savedState.sessionId || ('sess_' + Math.random().toString(36).slice(2));
+  var open      = savedState.open      || false;
+
+  function saveState() {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({
+        open:      open,
+        sessionId: sessionId,
+        history:   history.slice(-30)
+      }));
+    } catch(e) {}
+  }
 
   // ── Inject styles ──
   var style = document.createElement('style');
@@ -152,21 +167,42 @@
     }
   }
 
+  // ── Restore chat history on page load ──
+  function restoreHistory() {
+    if (history.length === 0) {
+      addMsg('bot', 'Hi! ' + TAGLINE + ' How can I help you today?');
+    } else {
+      history.forEach(function(m) {
+        addMsg(m.role === 'user' ? 'user' : 'bot', m.content);
+      });
+    }
+  }
+
   // ── Toggle ──
   function toggleChat() {
     open = !open;
     win.classList.toggle('open', open);
     bubble.textContent = open ? '✕' : AVATAR;
     if (open) {
+      var msgs = document.getElementById('aai-msgs');
+      if (!msgs.querySelector('.aai-msg')) restoreHistory();
+      msgs.scrollTop = msgs.scrollHeight;
       document.getElementById('aai-input').focus();
-      if (!document.querySelector('.aai-msg')) {
-        addMsg('bot', 'Hi! ' + TAGLINE + ' How can I help you today?');
-      }
     }
+    saveState();
   }
 
   bubble.addEventListener('click', toggleChat);
   document.getElementById('aai-close').addEventListener('click', toggleChat);
+
+  // ── Auto-open if was open on last page ──
+  if (open) {
+    win.classList.add('open');
+    bubble.textContent = '✕';
+    restoreHistory();
+    var msgs = document.getElementById('aai-msgs');
+    setTimeout(function() { msgs.scrollTop = msgs.scrollHeight; }, 50);
+  }
 
   // ── Send message ──
   document.getElementById('aai-form').addEventListener('submit', function(e) {
@@ -179,6 +215,7 @@
     input.value = '';
     addMsg('user', text);
     history.push({role: 'user', content: text});
+    saveState();
     send.disabled = true;
     setTyping(true);
 
@@ -193,7 +230,8 @@
       var reply = data.reply || data.error || 'Something went wrong.';
       addMsg('bot', reply);
       history.push({role: 'assistant', content: reply});
-      if (history.length > 20) history = history.slice(-20);
+      if (history.length > 30) history = history.slice(-30);
+      saveState();
     })
     .catch(function() {
       setTyping(false);
