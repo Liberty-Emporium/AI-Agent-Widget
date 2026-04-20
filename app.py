@@ -91,6 +91,9 @@ def init_db():
             system_prompt TEXT DEFAULT 'You are a helpful AI assistant.',
             model         TEXT DEFAULT 'openai/gpt-4o-mini',
             api_key       TEXT NOT NULL,
+            identity_md   TEXT DEFAULT '',
+            soul_md       TEXT DEFAULT '',
+            memory_md     TEXT DEFAULT '',
             allowed_origins TEXT DEFAULT '*',
             msg_count     INTEGER DEFAULT 0,
             training_notes TEXT DEFAULT '',
@@ -175,6 +178,20 @@ def migrate_model_names():
         db.close()
     except Exception as e:
         app.logger.error(f'Model migration error: {e}')
+
+def migrate_brain_columns():
+    """Add identity_md, soul_md, memory_md columns to existing agents table."""
+    try:
+        db = sqlite3.connect(DB_PATH)
+        cols = [r[1] for r in db.execute("PRAGMA table_info(agents)").fetchall()]
+        for col in ['identity_md', 'soul_md', 'memory_md']:
+            if col not in cols:
+                db.execute(f"ALTER TABLE agents ADD COLUMN {col} TEXT DEFAULT ''")
+                app.logger.info(f'Added column: {col}')
+        db.commit()
+        db.close()
+    except Exception as e:
+        app.logger.error(f'Brain column migration error: {e}')
 
 # ── Auth helpers ──────────────────────────────────────────────────────────────
 
@@ -269,6 +286,7 @@ def normalize_model(model):
     return MODEL_ALIASES.get(model, MODEL_ALIASES.get(model.lower(), model))
 
 migrate_model_names()
+migrate_brain_columns()
 
 # ── OpenRouter chat ───────────────────────────────────────────────────────────
 
@@ -633,7 +651,21 @@ def chat(agent_id):
         db.execute('UPDATE agents SET model=? WHERE id=?', (model, agent_id))
         db.commit()
 
-    # ── Inject Knowledge Base into system prompt ──
+    # ── Build system prompt: brain files + knowledge base ──
+    system_content = agent['system_prompt']
+
+    # Inject IDENTITY.md, SOUL.md, MEMORY.md if set
+    brain_sections = []
+    if agent['identity_md'] and agent['identity_md'].strip():
+        brain_sections.append(f'# IDENTITY\n{agent["identity_md"].strip()}')
+    if agent['soul_md'] and agent['soul_md'].strip():
+        brain_sections.append(f'# SOUL / PERSONALITY\n{agent["soul_md"].strip()}')
+    if agent['memory_md'] and agent['memory_md'].strip():
+        brain_sections.append(f'# MEMORY / KNOWLEDGE\n{agent["memory_md"].strip()}')
+    if brain_sections:
+        system_content = '\n\n'.join(brain_sections) + '\n\n---\n\n' + system_content
+
+    # Inject Knowledge Base
     kb_entries = db.execute(
         'SELECT title, content FROM knowledge_base WHERE agent_id=? ORDER BY created ASC',
         (agent_id,)
@@ -642,9 +674,7 @@ def chat(agent_id):
         kb_text = '\n\n'.join(
             f"[{e['title'] or 'Knowledge'}]\n{e['content']}" for e in kb_entries
         )
-        system_content = agent['system_prompt'] + f'\n\n---\nKNOWLEDGE BASE:\n{kb_text[:6000]}\n---'
-    else:
-        system_content = agent['system_prompt']
+        system_content = system_content + f'\n\n---\nKNOWLEDGE BASE:\n{kb_text[:6000]}\n---'
 
     # ── Inject visitor memory ──
     if session_id and session_id != 'dashboard-test':
@@ -718,6 +748,60 @@ def preview(agent_id):
         flash('Agent not found.', 'error')
         return redirect(url_for('index'))
     return render_template('preview.html', agent=dict(agent))
+
+
+# ── Agent Brain (IDENTITY.md / SOUL.md / MEMORY.md) ───────────────────────────────
+
+@app.route('/agent/<agent_id>/brain', methods=['GET', 'POST'])
+@login_required
+def agent_brain(agent_id):
+    db  = get_db()
+    agent = db.execute('SELECT * FROM agents WHERE id=? AND user_id=?',
+                       (agent_id, session['user_id'])).fetchone()
+    if not agent:
+        flash('Agent not found.', 'error')
+        return redirect(url_for('dashboard'))
+    if request.method == 'POST':
+        identity_md = request.form.get('identity_md', '').strip()
+        soul_md     = request.form.get('soul_md', '').strip()
+        memory_md   = request.form.get('memory_md', '').strip()
+        db.execute('UPDATE agents SET identity_md=?, soul_md=?, memory_md=? WHERE id=? AND user_id=?',
+                   (identity_md, soul_md, memory_md, agent_id, session['user_id']))
+        db.commit()
+        flash('Brain files saved! ✅ The agent will use these on the next conversation.', 'success')
+        return redirect(url_for('agent_brain', agent_id=agent_id))
+    return render_template('agent_brain.html', agent=agent)
+
+@app.route('/agent/<agent_id>/brain/api', methods=['GET'])
+@login_required  
+def agent_brain_api(agent_id):
+    """Return brain files as JSON — for external apps to fetch."""
+    db = get_db()
+    agent = db.execute('SELECT identity_md, soul_md, memory_md FROM agents WHERE id=? AND user_id=?',
+                       (agent_id, session['user_id'])).fetchone()
+    if not agent:
+        return jsonify({'error': 'not found'}), 404
+    return jsonify({'identity_md': agent['identity_md'],
+                    'soul_md':     agent['soul_md'],
+                    'memory_md':   agent['memory_md']})
+
+@app.route('/agent/<agent_id>/brain/update', methods=['POST'])
+def agent_brain_update(agent_id):
+    """Public endpoint — lets the hosted app update memory as agent learns."""
+    data     = request.get_json(silent=True) or {}
+    token    = data.get('token', '')
+    db       = get_db()
+    agent    = db.execute('SELECT * FROM agents WHERE id=?', (agent_id,)).fetchone()
+    if not agent:
+        return jsonify({'error': 'not found'}), 404
+    # Verify with agent api_key as token (the app must know its own key)
+    if token != agent['api_key']:
+        return jsonify({'error': 'unauthorized'}), 401
+    memory_md = data.get('memory_md')
+    if memory_md is not None:
+        db.execute('UPDATE agents SET memory_md=? WHERE id=?', (memory_md.strip(), agent_id))
+        db.commit()
+    return jsonify({'ok': True})
 
 # ── Knowledge Base ──────────────────────────────────────────────────────────────
 
