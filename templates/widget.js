@@ -145,13 +145,14 @@
       background:${COLOR}; color:#fff; padding:12px 14px;
       display:flex; align-items:center; gap:10px; flex-shrink:0;
     }
-    #aai-hist-btn {
+    #aai-hist-btn, #aai-new-chat-btn {
       background:rgba(255,255,255,.2); border:none; color:#fff;
       width:28px; height:28px; border-radius:7px; cursor:pointer;
       font-size:14px; display:flex; align-items:center; justify-content:center;
       flex-shrink:0; transition:background .15s;
     }
-    #aai-hist-btn:hover { background:rgba(255,255,255,.3); }
+    #aai-hist-btn:hover, #aai-new-chat-btn:hover { background:rgba(255,255,255,.3); }
+    #aai-new-chat-btn { font-size:18px; font-weight:300; }
     #aai-header-info { flex:1; min-width:0; }
     #aai-header-name { font-weight:700; font-size:14px; line-height:1.2; }
     #aai-header-tagline { font-size:10px; opacity:.85; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
@@ -235,6 +236,7 @@
             <div id="aai-header-name">${NAME}</div>
             <div id="aai-header-tagline">${TAGLINE}</div>
           </div>
+          <button id="aai-new-chat-btn" title="New conversation">&#43;</button>
           <button id="aai-close" aria-label="Close">✕</button>
         </div>
         <div id="aai-msgs"></div>
@@ -381,6 +383,7 @@
   document.getElementById('aai-close').addEventListener('click', toggleChat);
   document.getElementById('aai-hist-btn').addEventListener('click', toggleHistPanel);
   document.getElementById('aai-new-chat').addEventListener('click', startNewChat);
+  document.getElementById('aai-new-chat-btn').addEventListener('click', startNewChat);
 
   // ── Auto-open ──
   if (open) {
