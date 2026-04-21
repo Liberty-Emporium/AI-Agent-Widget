@@ -895,8 +895,11 @@ def chat(agent_id):
             if matched:
                 exec_result = execute_action(matched, params, agent['api_key'])
                 if exec_result.get('ok'):
+                    # Include full JSON result so agent can read IDs, values etc.
+                    raw_result = exec_result.get('result', {})
                     msg = exec_result.get('message', 'Done')
-                    results.append(f'✅ **{action_name}**: {msg}')
+                    result_json = json.dumps(raw_result, ensure_ascii=False)[:800]
+                    results.append(f'✅ **{action_name}**: {msg}\nResult: {result_json}')
                 else:
                     err = exec_result.get('error', exec_result.get('result', 'Unknown error'))
                     results.append(f'⚠️ **{action_name}** failed: {err}')
