@@ -529,6 +529,12 @@
       history.push({role:'assistant', content:reply});
       if (history.length>40) history=history.slice(-40);
       saveState();
+      // Auto-refresh the page after any action so changes are visible immediately
+      if (data.action_executed) {
+        setTimeout(function() {
+          window.location.reload();
+        }, 2200);
+      }
     })
     .catch(function(){
       setTyping(false);

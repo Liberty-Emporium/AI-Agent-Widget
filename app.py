@@ -869,6 +869,8 @@ def chat(agent_id):
 
     # ── Execute action if AI called one ──
     action_result_text = ''
+    action_was_executed = False
+    action_name = ''
     action_call = parse_action_call(reply)
     if action_call and actions_list:
         action_name = action_call.get('action', '')
@@ -881,6 +883,7 @@ def chat(agent_id):
             else:
                 action_result_text = f'\n\n⚠️ Action **{action_name}** failed: {exec_result.get("error", exec_result.get("result", ""))}'
         reply = strip_action_block(reply) + action_result_text
+        action_was_executed = True
 
     # Log message + increment counter
     db.execute('INSERT INTO messages(agent_id,role,content,session_id) VALUES(?,?,?,?)',
@@ -925,7 +928,14 @@ def chat(agent_id):
 
     db.commit()
 
-    return jsonify({'reply': reply})
+    response_data = {'reply': reply}
+    try:
+        if action_was_executed:
+            response_data['action_executed'] = True
+            response_data['action_name'] = action_name if 'action_name' in dir() else ''
+    except Exception:
+        pass
+    return jsonify(response_data)
 
 # ── Agent preview (live demo) ─────────────────────────────────────────────────
 
