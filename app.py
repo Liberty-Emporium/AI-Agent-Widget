@@ -380,6 +380,13 @@ def build_actions_prompt(actions, agent_id, agent_api_key, base_url):
         lines.append("You have no actions defined yet — but you can create them yourself (see below).")
     lines.append("\nAfter the action block, continue your reply explaining what you did.")
     lines.append("Only execute an action when the user explicitly asks you to DO something.")
+    lines.append("""
+## CRITICAL ACTION RULES — ALWAYS FOLLOW THESE:
+1. LOOKUP BEFORE ACTING: When the user gives you a NAME (e.g. 'John Smith') instead of a numeric ID, ALWAYS call lookup_claim/lookup first to find the correct numeric ID. NEVER guess or assume an ID.
+2. VERIFY AFTER DELETING: After any delete action, immediately call list_claims (or the equivalent list action) and show the user the updated list to CONFIRM the item is actually gone.
+3. VERIFY AFTER UPDATING: After any update (status change, add room, etc.), call get_claim or get_dashboard to confirm the change was applied.
+4. NEVER REPORT SUCCESS WITHOUT CONFIRMING: Do not tell the user something is done unless you have verified it via a follow-up API call. The API response alone is not enough — always check.
+5. SHOW YOUR WORK: Tell the user exactly what ID you found, what you deleted/changed, and show the verification result.""")
     # Self-management API
     lines.append(f"""
 ## SELF-MANAGEMENT: You can add your OWN actions
