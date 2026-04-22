@@ -550,9 +550,13 @@ def parse_all_action_calls(reply_text):
     """Extract ALL action JSON blocks from AI reply — supports multiple actions per message."""
     import re
     actions = []
-    for match in re.finditer(r'```action\s*\n({.*?})\s*\n```', reply_text, re.DOTALL):
+    for match in re.finditer(r'```action[\s\S]*?({[\s\S]*?})\s*```', reply_text, re.DOTALL):
         try:
-            actions.append(json.loads(match.group(1)))
+            obj = json.loads(match.group(1))
+            # Normalise: accept 'name' or 'action' as the action key
+            if 'name' in obj and 'action' not in obj:
+                obj['action'] = obj.pop('name')
+            actions.append(obj)
         except Exception:
             pass
     return actions
@@ -561,7 +565,7 @@ def parse_all_action_calls(reply_text):
 def strip_action_block(reply_text):
     """Remove ALL ```action ... ``` blocks from visible reply."""
     import re
-    return re.sub(r'```action\s*\n.*?\n```\n?', '', reply_text, flags=re.DOTALL).strip()
+    return re.sub(r'```action[\s\S]*?```\n?', '', reply_text, flags=re.DOTALL).strip()
 
 # ── Public pages ──────────────────────────────────────────────────────────────
 
@@ -2381,3 +2385,60 @@ def admin_train_chat(agent_id):
 
 if __name__ == '__main__':
     app.run(debug=False, port=5000)
+
+
+# ── Brain patch for Cakely ───────────────────────────────────────────────────
+@app.route('/setup/cakely-brain', methods=['GET'])
+def cakely_brain_patch():
+    AGENT_ID = 'Fx9e5L1JSpqJtjnhl2jLsQ'
+    BASE     = 'https://sweet-spot-cakes.up.railway.app'
+    TOKEN    = 'cakely-sweet-spot-2026'
+
+    MEMORY = f"""# MEMORY
+
+## Sweet Spot Custom Cakes
+- Staff bakery management app at {BASE}
+- Cakely API token: {TOKEN}
+- All API calls use: Authorization: Bearer {TOKEN}
+
+## HOW TO CALL ACTIONS — CRITICAL
+To call an action output a fenced code block tagged `action`:
+
+```action
+{{"action": "get_dashboard", "params": {{}}}}
+```
+
+Rules:
+- JSON must be on ONE LINE inside the block
+- Use "action" key (not "name")
+- "params" is a JSON object
+- Multiple actions = multiple blocks in one reply
+- Never explain the block — just output it and wait for the result
+
+## AVAILABLE ACTIONS
+
+### Read-only
+- get_dashboard — params: {{}}
+- get_todays_orders — params: {{}}
+- get_all_orders — params: {{"status": "pending"}} (status optional)
+- lookup_order — params: {{"q": "name or #number"}}
+- get_inventory — params: {{}}
+- get_low_stock — params: {{}}
+- lookup_customer — params: {{"q": "name/email/phone"}}
+- get_employees — params: {{}}
+- get_recipes — params: {{}}
+- get_suppliers — params: {{}}
+
+### Write actions
+- add_customer — params: {{"name":"...","email":"...","phone":"...","address":"...","birthday":"...","notes":"..."}}
+- add_supplier — params: {{"name":"...","contact":"...","email":"...","phone":"...","address":"...","notes":"..."}}
+- add_order — params: {{"customer_name":"...","customer_email":"...","customer_phone":"...","pickup_date":"YYYY-MM-DD","pickup_time":"HH:MM","special_notes":"...","items":[{{"name":"...","quantity":1,"unit_price":50.00,"customizations":"..."}}]}}
+- update_order_status — params: {{"order_id":1,"status":"confirmed"}}"""
+
+    db = get_db()
+    agent = db.execute('SELECT id FROM agents WHERE id=?', (AGENT_ID,)).fetchone()
+    if not agent:
+        return f'Agent {AGENT_ID} not found', 404
+    db.execute('UPDATE agents SET memory_md=? WHERE id=?', (MEMORY, AGENT_ID))
+    db.commit()
+    return jsonify({'ok': True, 'message': 'Cakely brain updated with correct action format!'})
