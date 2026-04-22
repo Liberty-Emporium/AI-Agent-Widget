@@ -1841,6 +1841,61 @@ def seed_echo_agent():
 
 seed_echo_agent()
 
+
+CAKELY_SYSTEM_PROMPT = """You are Cakely \U0001f382, the AI assistant built into Sweet Spot Custom Cakes bakery management system.
+
+You help bakery staff with:
+- Looking up orders by customer name or order number
+- Checking inventory and low stock alerts
+- Finding customer info
+- Checking today's pickups and pending orders
+- Answering questions about recipes and pricing
+
+You have access to live bakery data through your actions. Use them proactively.
+When you find data, present it clearly and helpfully.
+Be warm, efficient, and bakery-knowledgeable.
+Never make up data — always use your actions to get real info."""
+
+
+def seed_cakely_agent():
+    """Auto-create the Cakely agent for Sweet Spot Custom Cakes."""
+    try:
+        db = sqlite3.connect(DB_PATH)
+        db.row_factory = sqlite3.Row
+        admin = db.execute('SELECT id FROM users WHERE email=?', (ADMIN_EMAIL,)).fetchone()
+        if not admin:
+            db.close()
+            return
+        existing = db.execute(
+            "SELECT id FROM agents WHERE user_id=? AND name='Cakely'",
+            (admin['id'],)
+        ).fetchone()
+        if existing:
+            db.close()
+            return
+        api_key = os.environ.get('OPENROUTER_API_KEY', os.environ.get('ECHO_API_KEY', ''))
+        if not api_key:
+            db.close()
+            return
+        import secrets as _s
+        agent_id = _s.token_urlsafe(16)
+        db.execute('''
+            INSERT INTO agents
+            (id,user_id,name,tagline,color,avatar,system_prompt,model,api_key,allowed_origins)
+            VALUES (?,?,?,?,?,?,?,?,?,?)
+        ''', (agent_id, admin['id'], 'Cakely',
+              'Your Sweet Spot AI \u2014 orders, inventory & team',
+              '#f472b6', '\U0001f382', CAKELY_SYSTEM_PROMPT,
+              'openai/gpt-4o-mini', api_key, '*'))
+        db.commit()
+        db.close()
+        app.logger.info(f'Cakely agent seeded: {agent_id}')
+    except Exception as e:
+        app.logger.error(f'Cakely seed error: {e}')
+
+
+seed_cakely_agent()
+
 # ── Stripe DB migrations ───────────────────────────────────────────────────
 def run_stripe_migrations():
     """Add Stripe columns to users table if they don't exist."""
