@@ -1084,6 +1084,35 @@ def preview(agent_id):
 
 # ── Agent Brain (IDENTITY.md / SOUL.md / MEMORY.md) ───────────────────────────────
 
+
+# -- Brain Sync Helper ---------------------------------------------------------
+
+def _push_brain_to_ecdash(identity_md, soul_md, memory_md):
+    """Push brain files to EcDash after a save. Silent on failure."""
+    try:
+        import json as _json
+        ecdash_url  = os.environ.get('ECDASH_URL', 'https://jay-portfolio-production.up.railway.app')
+        sync_token  = os.environ.get('BRAIN_SYNC_TOKEN', '')
+        if not ecdash_url or not sync_token:
+            return  # not configured -- skip silently
+        payload = _json.dumps({
+            'IDENTITY.md': identity_md,
+            'SOUL.md':     soul_md,
+            'MEMORY.md':   memory_md,
+        }).encode('utf-8')
+        req = urllib.request.Request(
+            ecdash_url.rstrip('/') + '/api/brain/sync',
+            data=payload,
+            headers={
+                'Content-Type': 'application/json',
+                'X-Brain-Sync-Token': sync_token,
+            },
+            method='POST'
+        )
+        with urllib.request.urlopen(req, timeout=5): pass
+    except Exception:
+        pass  # Never block the user -- sync is best-effort
+
 @app.route('/agent/<agent_id>/brain', methods=['GET', 'POST'])
 @login_required
 def agent_brain(agent_id):
@@ -1100,6 +1129,8 @@ def agent_brain(agent_id):
         db.execute('UPDATE agents SET identity_md=?, soul_md=?, memory_md=? WHERE id=? AND user_id=?',
                    (identity_md, soul_md, memory_md, agent_id, session['user_id']))
         db.commit()
+        # — Push to EcDash brain sync if configured —
+        _push_brain_to_ecdash(identity_md, soul_md, memory_md)
         flash('Brain files saved! ✅ The agent will use these on the next conversation.', 'success')
         return redirect(url_for('agent_brain', agent_id=agent_id))
     return render_template('agent_brain.html', agent=agent)
@@ -1116,6 +1147,24 @@ def agent_brain_api(agent_id):
     return jsonify({'identity_md': agent['identity_md'],
                     'soul_md':     agent['soul_md'],
                     'memory_md':   agent['memory_md']})
+
+@app.route('/agent/<agent_id>/brain/public', methods=['GET'])
+def agent_brain_public(agent_id):
+    """Token-protected brain export — for EcDash brain sync."""
+    sync_token = os.environ.get('BRAIN_SYNC_TOKEN', '')
+    if not sync_token:
+        return jsonify({'error': 'sync not configured'}), 503
+    auth = request.headers.get('X-Brain-Sync-Token', '')
+    if not auth or auth != sync_token:
+        return jsonify({'error': 'unauthorized'}), 401
+    db = get_db()
+    agent = db.execute('SELECT identity_md, soul_md, memory_md FROM agents WHERE id=?',
+                       (agent_id,)).fetchone()
+    if not agent:
+        return jsonify({'error': 'not found'}), 404
+    return jsonify({'identity_md': agent['identity_md'] or '',
+                    'soul_md':     agent['soul_md'] or '',
+                    'memory_md':   agent['memory_md'] or ''})
 
 @app.route('/agent/<agent_id>/facts', methods=['GET'])
 @login_required
