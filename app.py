@@ -1949,6 +1949,79 @@ def seed_cakely_agent():
 
 seed_cakely_agent()
 
+
+ALEXANDER_AI_VOICE_SYSTEM_PROMPT = """You are the AI assistant for Alexander AI Voice — an open source, local-first voice cloning desktop app built by Alexander AI Integrated Solutions.
+
+You help visitors with:
+- Understanding what Alexander AI Voice does (local TTS, voice cloning, MCP integration, Captures/dictation)
+- Downloading and installing the app (Mac, Windows, Linux)
+- Setting up voices and TTS engines (Kokoro, Chatterbox, Qwen3, LuxTTS, and more)
+- Using the API and MCP server for agent integrations
+- Troubleshooting common issues
+- Explaining pricing (it's free and open source, MIT license)
+- Pointing to documentation at docs.alexanderaivoice.com
+- Connecting visitors to Alexander AI Integrated Solutions for custom AI solutions
+
+Key facts:
+- 100% local — no cloud, no API keys needed, no per-character fees
+- Voice data never leaves the user's device
+- 7 TTS engines, Whisper STT, one local LLM (Qwen 3.5)
+- MCP server at localhost:17493 for agent integrations
+- Open source on GitHub: Liberty-Emporium/alexander-ai-voice
+- Built by Alexander AI Integrated Solutions (alexanderaiis.com)
+- Contact: jay@alexanderaiis.com
+
+Be friendly, knowledgeable, and concise. If someone wants a custom AI solution for their business, let them know Alexander AI Integrated Solutions can help."""
+
+
+def seed_alexander_ai_voice_agent():
+    """Auto-create the Alexander AI Voice support agent."""
+    try:
+        db = sqlite3.connect(DB_PATH)
+        db.row_factory = sqlite3.Row
+        admin = db.execute('SELECT id FROM users WHERE email=?', (ADMIN_EMAIL,)).fetchone()
+        if not admin:
+            db.close()
+            return
+        existing = db.execute(
+            "SELECT id FROM agents WHERE user_id=? AND name='Alexander AI Voice'",
+            (admin['id'],)
+        ).fetchone()
+        if existing:
+            db.execute('UPDATE agents SET system_prompt=?, tagline=? WHERE id=?',
+                (ALEXANDER_AI_VOICE_SYSTEM_PROMPT,
+                 'Ask me anything about Alexander AI Voice!', existing['id']))
+            db.commit()
+            agent_id = existing['id']
+            app.logger.info(f'Alexander AI Voice agent updated: {agent_id}')
+            db.close()
+            return
+        api_key = os.environ.get('OPENROUTER_API_KEY', os.environ.get('ECHO_API_KEY', ''))
+        if not api_key:
+            app.logger.warning('Alexander AI Voice seed skipped: no OPENROUTER_API_KEY set')
+            db.close()
+            return
+        agent_id = 'alexander-ai-voice'
+        # Check if this specific ID is taken
+        if db.execute('SELECT id FROM agents WHERE id=?', (agent_id,)).fetchone():
+            agent_id = 'alexander-ai-voice-' + secrets.token_urlsafe(4)
+        db.execute('''
+            INSERT INTO agents
+            (id,user_id,name,tagline,color,avatar,system_prompt,model,api_key,allowed_origins)
+            VALUES (?,?,?,?,?,?,?,?,?,?)
+        ''', (agent_id, admin['id'], 'Alexander AI Voice',
+              'Ask me anything about Alexander AI Voice!',
+              '#7c3aed', '🎙️', ALEXANDER_AI_VOICE_SYSTEM_PROMPT,
+              'openai/gpt-4o-mini', api_key, '*'))
+        db.commit()
+        db.close()
+        app.logger.info(f'Alexander AI Voice agent seeded: {agent_id}')
+    except Exception as e:
+        app.logger.error(f'Alexander AI Voice seed error: {e}')
+
+seed_alexander_ai_voice_agent()
+
+
 # ── Stripe DB migrations ───────────────────────────────────────────────────
 def run_stripe_migrations():
     """Add Stripe columns to users table if they don't exist."""
