@@ -388,6 +388,30 @@
     msgs.scrollTop = msgs.scrollHeight;
   }
 
+  // ── KYS Rotation Notification ──
+  // Called once per chat open. If KYS rotated the customer's API key,
+  // the agent delivers a friendly message telling them to check KYS.
+  var CLIENT_ID_KEY = 'aai_client_id_' + AGENT_ID;
+
+  function checkRotationNotification() {
+    var clientId = '';
+    try { clientId = localStorage.getItem(CLIENT_ID_KEY) || ''; } catch(e) {}
+    if (!clientId) return; // no client id stored — not a registered customer
+    fetch(BASE_URL + '/api/kys/pending-notification?client_id=' + encodeURIComponent(clientId) + '&app_name=' + encodeURIComponent(AGENT_ID))
+      .then(function(r){ return r.json(); })
+      .then(function(data) {
+        if (data.pending && data.message) {
+          // Small delay so the welcome message renders first
+          setTimeout(function() {
+            addMsg('bot', data.message);
+            history.push({role:'assistant', content: data.message});
+            saveState();
+          }, 600);
+        }
+      })
+      .catch(function(){}); // silent fail
+  }
+
   // ── Toggle chat open/close ──
   function toggleChat() {
     open = !open;
@@ -398,6 +422,7 @@
       if (!msgs.querySelector('.aai-msg')) restoreHistory();
       msgs.scrollTop = msgs.scrollHeight;
       document.getElementById('aai-input').focus();
+      checkRotationNotification();
     } else {
       closeHistPanel();
       flushCurrentConv();
@@ -420,6 +445,7 @@
       var msgs = document.getElementById('aai-msgs');
       msgs.scrollTop = msgs.scrollHeight;
     }, 50);
+    checkRotationNotification();
   }
 
   // ── Photo attach ──
