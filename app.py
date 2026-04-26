@@ -1872,11 +1872,7 @@ def seed_echo_agent():
             db.commit()
             db.close()
             return
-        api_key = os.environ.get('OPENROUTER_API_KEY', os.environ.get('ECHO_API_KEY', ''))
-        if not api_key:
-            app.logger.warning('Echo seed skipped: no OPENROUTER_API_KEY set')
-            db.close()
-            return
+        api_key = os.environ.get('OPENROUTER_API_KEY', os.environ.get('ECHO_API_KEY', '')) or fetch_from_kys('openrouter') or ''
         agent_id = secrets.token_urlsafe(16)
         db.execute('''
             INSERT INTO agents
@@ -1926,10 +1922,7 @@ def seed_cakely_agent():
         if existing:
             db.close()
             return
-        api_key = os.environ.get('OPENROUTER_API_KEY', os.environ.get('ECHO_API_KEY', ''))
-        if not api_key:
-            db.close()
-            return
+        api_key = os.environ.get('OPENROUTER_API_KEY', os.environ.get('ECHO_API_KEY', '')) or fetch_from_kys('openrouter') or ''
         import secrets as _s
         agent_id = _s.token_urlsafe(16)
         db.execute('''
@@ -1996,11 +1989,7 @@ def seed_alexander_ai_voice_agent():
             app.logger.info(f'Alexander AI Voice agent updated: {agent_id}')
             db.close()
             return
-        api_key = os.environ.get('OPENROUTER_API_KEY', os.environ.get('ECHO_API_KEY', ''))
-        if not api_key:
-            app.logger.warning('Alexander AI Voice seed skipped: no OPENROUTER_API_KEY set')
-            db.close()
-            return
+        api_key = os.environ.get('OPENROUTER_API_KEY', os.environ.get('ECHO_API_KEY', '')) or fetch_from_kys('openrouter') or ''
         agent_id = 'alexander-ai-voice'
         # Check if this specific ID is taken
         if db.execute('SELECT id FROM agents WHERE id=?', (agent_id,)).fetchone():
@@ -2504,6 +2493,130 @@ def admin_train_chat(agent_id):
 
     reply = call_openrouter(messages, test_model, agent['api_key'])
     return jsonify({'reply': reply})
+
+# ── KYS KEY ROTATION WEBHOOK ─────────────────────────────────────────────
+# KYS calls this when it rotates a client key.
+# We store a pending notification so the agent delivers it next time
+# the customer opens the chat widget.
+
+def _init_rotation_notifications_table():
+    try:
+        db = sqlite3.connect(DB_PATH)
+        db.execute('''
+            CREATE TABLE IF NOT EXISTS rotation_notifications (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                app_name TEXT NOT NULL,
+                client_id TEXT NOT NULL,
+                client_email TEXT DEFAULT '',
+                new_key TEXT NOT NULL,
+                kys_url TEXT DEFAULT '',
+                next_rotation TEXT DEFAULT '',
+                delivered INTEGER DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        db.commit()
+        db.close()
+    except Exception as e:
+        app.logger.error(f'rotation_notifications init error: {e}')
+
+_init_rotation_notifications_table()
+
+KYS_WEBHOOK_SECRET = os.environ.get('KYS_WEBHOOK_SECRET', '')
+
+@app.route('/api/kys/rotation-webhook', methods=['POST'])
+def kys_rotation_webhook():
+    """Receives key rotation events from KYS.
+    Stores a pending notification to deliver to the customer via the chat widget.
+    Optional: set KYS_WEBHOOK_SECRET env var for HMAC verification.
+    """
+    # Optional signature verification
+    if KYS_WEBHOOK_SECRET:
+        sig = request.headers.get('X-KYS-Signature', '')
+        expected = __import__('hmac').new(
+            KYS_WEBHOOK_SECRET.encode(),
+            request.get_data(),
+            'sha256'
+        ).hexdigest()
+        if not __import__('hmac').compare_digest(sig, expected):
+            return jsonify({'error': 'Invalid signature'}), 403
+
+    data = request.get_json(silent=True) or {}
+    event        = data.get('event', '')
+    app_name     = (data.get('app_name') or '').strip()
+    client_id    = (data.get('client_id') or '').strip()
+    client_email = (data.get('client_email') or client_id).strip()
+    new_key      = (data.get('new_key') or '').strip()
+    next_rotation = (data.get('next_rotation') or '').strip()
+    kys_url      = (data.get('kys_url') or 'https://ai-api-tracker-production.up.railway.app').strip()
+
+    if event != 'key_rotated' or not app_name or not client_id or not new_key:
+        return jsonify({'ok': False, 'error': 'Missing required fields'}), 400
+
+    db = get_db()
+    db.execute('''
+        INSERT INTO rotation_notifications
+        (app_name, client_id, client_email, new_key, kys_url, next_rotation)
+        VALUES (?,?,?,?,?,?)
+    ''', (app_name, client_id, client_email, new_key, kys_url, next_rotation))
+    db.commit()
+    db.close()
+
+    app.logger.info(f'Rotation notification queued for {app_name}/{client_id}')
+    return jsonify({'ok': True, 'message': 'Notification queued for delivery'})
+
+
+@app.route('/api/kys/pending-notification', methods=['GET'])
+def kys_pending_notification():
+    """Widget JS polls this on chat open to check if there's a key rotation
+    notification waiting for this client.
+    Query: ?client_id=user@email.com&app_name=widget
+    Returns: {"pending": true, "message": "..."} or {"pending": false}
+    """
+    client_id = (request.args.get('client_id') or '').strip()
+    app_name  = (request.args.get('app_name') or '').strip()
+
+    if not client_id or not app_name:
+        return jsonify({'pending': False})
+
+    db = get_db()
+    row = db.execute('''
+        SELECT id, new_key, kys_url, next_rotation
+        FROM rotation_notifications
+        WHERE app_name=? AND client_id=? AND delivered=0
+        ORDER BY created_at DESC LIMIT 1
+    ''', (app_name, client_id)).fetchone()
+
+    if not row:
+        db.close()
+        return jsonify({'pending': False})
+
+    # Mark as delivered
+    db.execute('UPDATE rotation_notifications SET delivered=1 WHERE id=?', (row['id'],))
+    db.commit()
+    db.close()
+
+    kys_url = row['kys_url'] or 'https://ai-api-tracker-production.up.railway.app'
+    next_rot = row['next_rotation'] or ''
+    next_rot_str = f' Your next rotation is scheduled for {next_rot[:10]}.' if next_rot else ''
+
+    message = (
+        f"🔄 **Your API key has been rotated!**\n\n"
+        f"Your new key is ready and waiting for you.{next_rot_str}\n\n"
+        f"🔑 **Pick up your new key here:**\n"
+        f"{kys_url}\n\n"
+        f"Just log in and your updated key will be right there. "
+        f"Your old key will continue working for 24 hours to give you time to update."
+    )
+
+    return jsonify({
+        'pending': True,
+        'message': message,
+        'kys_url': kys_url
+    })
+
+# ── END KYS ROTATION WEBHOOK ───────────────────────────────────────────
+
 
 if __name__ == '__main__':
     app.run(debug=False, port=5000)
