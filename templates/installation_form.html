@@ -10,6 +10,8 @@
     </div>
 
     <form method="POST" action="/billing/installation-details">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
       <input type="hidden" name="ticket_id" value="{{ ticket_id }}">
 
       <div class="form-group">

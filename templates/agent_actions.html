@@ -92,6 +92,8 @@
   <div class="form-card">
     <h3 style="font-size:1rem;font-weight:700;margin-bottom:1.25rem;">➕ Add New Action</h3>
     <form method="POST" action="/agent/{{ agent.id }}/actions/add">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
 
       <div class="form-row" style="margin-bottom:1rem;">
         <div class="form-group" style="margin:0">
@@ -168,12 +170,16 @@
       <div class="action-btns">
         <button class="btn btn-outline btn-sm" onclick="testAction({{ action.id }}, this)">🧪 Test</button>
         <form method="POST" action="/agent/{{ agent.id }}/actions/{{ action.id }}/toggle" style="display:inline">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
           <button type="submit" class="btn btn-outline btn-sm">
             {{ '⏸ Disable' if action.enabled else '▶ Enable' }}
           </button>
         </form>
         <form method="POST" action="/agent/{{ agent.id }}/actions/{{ action.id }}/delete" style="display:inline"
               onsubmit="return confirm('Delete this action?')">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
           <button type="submit" class="btn btn-danger btn-sm">🗑 Delete</button>
         </form>
       </div>

@@ -88,6 +88,8 @@
   <div class="card" id="newTicketForm">
     <h2 style="font-size:1rem;font-weight:700;margin-bottom:1.25rem;">📝 Submit a New Ticket</h2>
     <form method="POST" action="/tickets/new">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
 
       <!-- Priority picker -->
       <div class="form-group">

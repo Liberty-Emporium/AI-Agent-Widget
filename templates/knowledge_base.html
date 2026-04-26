@@ -67,6 +67,8 @@
       <!-- Text tab -->
       <div id="tab-text" class="tab-pane active">
         <form method="POST" action="/agent/{{ agent.id }}/kb/add">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
           <input type="hidden" name="type" value="text">
           <div class="form-group">
             <label>Title (optional)</label>
@@ -84,6 +86,8 @@
       <!-- URL tab -->
       <div id="tab-url" class="tab-pane">
         <form method="POST" action="/agent/{{ agent.id }}/kb/add">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
           <input type="hidden" name="type" value="url">
           <div class="form-group">
             <label>URL to scrape</label>
@@ -103,6 +107,8 @@
       <!-- File tab -->
       <div id="tab-file" class="tab-pane">
         <form method="POST" action="/agent/{{ agent.id }}/kb/add" enctype="multipart/form-data">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
           <input type="hidden" name="type" value="file">
           <div class="form-group">
             <label>Upload File</label>
@@ -129,6 +135,8 @@
         <h2 style="font-size:1rem;font-weight:700;">📚 Current Knowledge Base</h2>
         {% if entries %}
         <form method="POST" action="/agent/{{ agent.id }}/kb/clear" onsubmit="return confirm('Clear all KB entries? This cannot be undone.')">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
           <button type="submit" class="btn btn-danger btn-sm">🗑 Clear All</button>
         </form>
         {% endif %}
@@ -145,6 +153,8 @@
               </span>
             </div>
             <form method="POST" action="/agent/{{ agent.id }}/kb/delete/{{ entry.id }}" style="flex-shrink:0;">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
               <button type="submit" class="btn btn-danger btn-sm" title="Delete">✕</button>
             </form>
           </div>
@@ -171,6 +181,8 @@
       </div>
       {% if memories %}
       <form method="POST" action="/agent/{{ agent.id }}/memory/clear" onsubmit="return confirm('Clear all visitor memories?')">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
         <button type="submit" class="btn btn-danger btn-sm">🗑 Clear All Memories</button>
       </form>
       {% endif %}
@@ -196,6 +208,8 @@
             <td style="padding:8px 12px;color:#6b7280;">{{ m.last_seen[:16] }}</td>
             <td style="padding:8px 12px;">
               <form method="POST" action="/agent/{{ agent.id }}/memory/delete/{{ m.id }}">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
                 <button type="submit" class="btn btn-danger btn-sm">✕</button>
               </form>
             </td>

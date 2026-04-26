@@ -79,6 +79,8 @@
   {% endif %}
 
   <form method="POST" action="/admin/agent/{{ agent.id }}/train/save" id="trainForm">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
   <div class="trainer-grid">
 
     <!-- LEFT: Config + Notes -->

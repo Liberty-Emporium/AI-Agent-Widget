@@ -128,6 +128,8 @@
             </td>
             <td>
               <form method="POST" action="/admin/user/{{ u.id }}/plan" style="display:inline;">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
                 <select name="plan" class="plan-select" onchange="this.form.submit()">
                   {% for p in ['free','pro','business','admin'] %}
                   <option value="{{ p }}" {{ 'selected' if u.plan == p else '' }}>{{ p | upper }}</option>
@@ -142,12 +144,16 @@
               <div style="display:flex;gap:6px;flex-wrap:wrap;">
                 {% if u.id != session.get('user_id') %}
                 <form method="POST" action="/admin/user/{{ u.id }}/toggle-admin" style="display:inline;">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
                   <button type="submit" class="btn btn-outline btn-sm" style="font-size:0.75rem;padding:4px 10px;">
                     {{ '🔒 Revoke Admin' if u.is_admin else '🛡️ Make Admin' }}
                   </button>
                 </form>
                 <form method="POST" action="/admin/user/{{ u.id }}/delete" style="display:inline;"
                       onsubmit="return confirm('Delete {{ u.email }} and all their agents? This cannot be undone.');">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
                   <button type="submit" class="btn btn-danger btn-sm" style="font-size:0.75rem;padding:4px 10px;">🗑 Delete</button>
                 </form>
                 {% else %}

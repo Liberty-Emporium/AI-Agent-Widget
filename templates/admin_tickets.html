@@ -111,6 +111,8 @@
       <!-- Reply form -->
       <div class="reply-form" id="reply-{{ t.id }}">
         <form method="POST" action="/admin/tickets/{{ t.id }}/reply">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
           <div class="form-group" style="margin-bottom:10px;">
             <label style="font-size:0.8rem;">Reply to customer</label>
             <textarea name="admin_reply" rows="3" placeholder="Your response to the customer…" style="resize:vertical;">{{ t.admin_reply or '' }}</textarea>
