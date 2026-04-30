@@ -1,103 +1,204 @@
 {% extends "base.html" %}
 {% block title %}Pricing — Alexander AI Agent{% endblock %}
-{% block content %}
+{% block extra_css %}
 <style>
-  .pricing-hero{text-align:center;padding:4rem 2rem 2rem;}
-  .pricing-hero h1{font-size:2.5rem;font-weight:800;margin-bottom:1rem;}
-  .pricing-hero p{color:#6b7280;font-size:1rem;max-width:480px;margin:0 auto;}
-  .plans{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1.5rem;
-         max-width:900px;margin:3rem auto;padding:0 2rem;}
-  .plan{background:#111827;border:1px solid rgba(255,255,255,0.08);border-radius:16px;padding:2rem;
-        display:flex;flex-direction:column;gap:1.25rem;}
-  .plan.featured{border-color:#6366f1;position:relative;}
-  .plan-badge{position:absolute;top:-12px;left:50%;transform:translateX(-50%);
-              background:#6366f1;color:#fff;padding:4px 14px;border-radius:20px;
-              font-size:0.78rem;font-weight:700;white-space:nowrap;}
-  .plan-name{font-size:1.1rem;font-weight:800;}
-  .plan-price{font-size:2.25rem;font-weight:800;line-height:1;}
-  .plan-price span{font-size:1rem;font-weight:400;color:#6b7280;}
-  .plan-features{list-style:none;display:flex;flex-direction:column;gap:10px;font-size:0.9rem;flex:1;}
-  .plan-features li::before{content:'✓ ';color:#10b981;font-weight:700;}
-  .plan-features li.no::before{content:'✗ ';color:#4b5563;}
+  .pricing-hero{text-align:center;padding:5rem 2rem 3rem;position:relative;overflow:hidden;}
+  .orb{position:absolute;border-radius:50%;filter:blur(80px);pointer-events:none;}
+  .pricing-hero h1{font-size:clamp(2rem,5vw,3rem);font-weight:900;letter-spacing:-0.02em;margin-bottom:1rem;}
+  .pricing-hero p{color:#94a3b8;font-size:1rem;max-width:480px;margin:0 auto 1.5rem;line-height:1.6;}
+  .toggle-wrap{display:inline-flex;align-items:center;gap:10px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:30px;padding:4px 6px;font-size:0.82rem;color:#6b7280;}
+
+  .plans{display:grid;grid-template-columns:repeat(auto-fit,minmax(290px,1fr));gap:1.5rem;max-width:960px;margin:3rem auto;padding:0 2rem;}
+  .plan{
+    background:#0a0a14;
+    border:1px solid rgba(255,255,255,0.07);
+    border-radius:20px;padding:2.25rem;
+    display:flex;flex-direction:column;gap:0;
+    position:relative;transition:transform 0.2s,border-color 0.2s;
+  }
+  .plan:hover{transform:translateY(-3px);}
+  .plan.featured{border-color:rgba(99,102,241,0.4);box-shadow:0 0 40px rgba(99,102,241,0.1);}
+  .plan-badge{
+    position:absolute;top:-13px;left:50%;transform:translateX(-50%);
+    background:linear-gradient(135deg,#6366f1,#8b5cf6);
+    color:#fff;padding:4px 16px;border-radius:20px;
+    font-size:0.73rem;font-weight:700;white-space:nowrap;
+    box-shadow:0 0 16px rgba(99,102,241,0.5);
+  }
+  .plan-icon{font-size:1.75rem;margin-bottom:1rem;}
+  .plan-name{font-size:1rem;font-weight:800;color:#f1f5f9;margin-bottom:0.5rem;}
+  .plan-desc{font-size:0.82rem;color:#6b7280;margin-bottom:1.5rem;line-height:1.5;}
+  .plan-price{font-size:2.75rem;font-weight:900;line-height:1;letter-spacing:-0.02em;margin-bottom:0.35rem;}
+  .plan-price sup{font-size:1.2rem;font-weight:700;vertical-align:super;}
+  .plan-price span{font-size:0.9rem;font-weight:400;color:#6b7280;}
+  .plan-divider{height:1px;background:rgba(255,255,255,0.06);margin:1.5rem 0;}
+  .plan-features{list-style:none;display:flex;flex-direction:column;gap:10px;font-size:0.875rem;flex:1;margin-bottom:2rem;}
+  .plan-features li{display:flex;align-items:center;gap:10px;color:#d1d5db;}
+  .plan-features li .ck{color:#34d399;font-weight:700;flex-shrink:0;}
   .plan-features li.no{color:#4b5563;}
+  .plan-features li.no .ck{color:#374151;}
+
+  /* Install card */
+  .install-card{
+    background:linear-gradient(135deg,rgba(99,102,241,0.06),rgba(16,185,129,0.04));
+    border:1px solid rgba(99,102,241,0.2);
+    border-radius:20px;padding:2.5rem;text-align:center;
+    max-width:680px;margin:0 auto 3rem;
+  }
+  .install-badge{
+    display:inline-block;background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.25);
+    border-radius:20px;padding:4px 14px;font-size:0.73rem;font-weight:700;
+    color:#34d399;letter-spacing:0.05em;text-transform:uppercase;margin-bottom:1rem;
+  }
+  .install-card h2{font-size:1.4rem;font-weight:800;margin-bottom:0.75rem;}
+  .install-card p{color:#94a3b8;font-size:0.9rem;line-height:1.6;margin-bottom:1.5rem;max-width:480px;margin-left:auto;margin-right:auto;}
+  .install-perks{display:flex;flex-direction:column;gap:8px;align-items:center;margin-bottom:2rem;}
+  .install-perks li{display:flex;align-items:center;gap:8px;font-size:0.875rem;color:#d1d5db;list-style:none;}
+  .install-price{font-size:2.5rem;font-weight:900;color:#f1f5f9;letter-spacing:-0.02em;}
+  .install-price span{font-size:0.9rem;font-weight:400;color:#6b7280;}
+
+  /* FAQ */
+  .faq{max-width:640px;margin:0 auto;padding:0 2rem 4rem;}
+  .faq h2{font-size:1.5rem;font-weight:800;margin-bottom:2rem;text-align:center;}
+  .faq-item{border-bottom:1px solid rgba(255,255,255,0.06);padding:1.25rem 0;}
+  .faq-item dt{font-weight:600;font-size:0.9rem;margin-bottom:0.5rem;color:#f1f5f9;}
+  .faq-item dd{color:#6b7280;font-size:0.875rem;line-height:1.6;}
 </style>
+{% endblock %}
+
+{% block content %}
+
+<!-- ── HERO ── -->
 <div class="pricing-hero">
-  <h1>Simple, Honest Pricing</h1>
-  <p>Start free. Upgrade when you need more. No hidden fees, no surprises.</p>
+  <div class="orb" style="width:500px;height:500px;background:radial-gradient(circle,rgba(99,102,241,0.1),transparent 70%);top:-150px;left:50%;transform:translateX(-50%);"></div>
+  <div style="display:inline-block;background:rgba(99,102,241,0.1);border:1px solid rgba(99,102,241,0.2);border-radius:20px;padding:4px 14px;font-size:0.73rem;font-weight:700;color:#a5b4fc;letter-spacing:0.05em;text-transform:uppercase;margin-bottom:1.25rem;">Simple Pricing</div>
+  <h1>Start free.<br>Scale when you're ready.</h1>
+  <p>No hidden fees. No surprise bills. Pay only for what you need.</p>
 </div>
 
+<!-- ── PLANS ── -->
 <div class="plans">
+
+  <!-- Free -->
+  <div class="plan">
+    <div class="plan-icon">🆓</div>
+    <div class="plan-name">Free</div>
+    <div class="plan-desc">Perfect for trying it out and small personal projects.</div>
+    <div class="plan-price"><sup>$</sup>0<span>/mo</span></div>
+    <div class="plan-divider"></div>
+    <ul class="plan-features">
+      <li><span class="ck">✓</span> 1 AI agent</li>
+      <li><span class="ck">✓</span> 500 messages / month</li>
+      <li><span class="ck">✓</span> All AI models</li>
+      <li><span class="ck">✓</span> Embed on any site</li>
+      <li><span class="ck">✓</span> Basic analytics</li>
+      <li class="no"><span class="ck">✗</span> Remove "Powered by" branding</li>
+      <li class="no"><span class="ck">✗</span> Priority support</li>
+    </ul>
+    <a href="/signup" class="btn btn-ghost" style="text-align:center;justify-content:center;width:100%;">Get Started Free</a>
+  </div>
+
+  <!-- Pro (featured) -->
   <div class="plan featured">
     <div class="plan-badge">⭐ Most Popular</div>
-    <div class="plan-name">🚀 Pro</div>
-    <div class="plan-price">$19<span>/mo</span></div>
+    <div class="plan-icon">🚀</div>
+    <div class="plan-name">Pro</div>
+    <div class="plan-desc">For businesses serious about AI-powered customer engagement.</div>
+    <div class="plan-price" style="background:linear-gradient(135deg,#a5b4fc,#6366f1);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;"><sup style="-webkit-text-fill-color:#a5b4fc;">$</sup>19<span style="-webkit-text-fill-color:#6b7280;">/mo</span></div>
+    <div class="plan-divider"></div>
     <ul class="plan-features">
-      <li>10 AI agents</li>
-      <li>10,000 messages / month</li>
-      <li>All AI models</li>
-      <li>Embed on any site</li>
-      <li>Full analytics</li>
-      <li>Remove "Powered by" branding</li>
-      <li>Priority email support</li>
+      <li><span class="ck">✓</span> 10 AI agents</li>
+      <li><span class="ck">✓</span> 10,000 messages / month</li>
+      <li><span class="ck">✓</span> All AI models</li>
+      <li><span class="ck">✓</span> Embed on any site</li>
+      <li><span class="ck">✓</span> Full analytics</li>
+      <li><span class="ck">✓</span> Remove "Powered by" branding</li>
+      <li><span class="ck">✓</span> Priority email support</li>
     </ul>
-    {% if session.user_id %}
-    <a href="/billing/checkout/pro" class="btn btn-primary" style="text-align:center;justify-content:center;">⚡ Upgrade to Pro — $19/mo</a>
+    {% if session.get('user_id') %}
+    <a href="/billing/checkout/pro" class="btn btn-primary" style="text-align:center;justify-content:center;width:100%;">⚡ Upgrade to Pro — $19/mo</a>
     {% else %}
-    <a href="/signup" class="btn btn-primary" style="text-align:center;justify-content:center;">Start Pro — $19/mo</a>
+    <a href="/signup" class="btn btn-primary" style="text-align:center;justify-content:center;width:100%;">Start Pro — $19/mo →</a>
     {% endif %}
   </div>
 
+  <!-- Business -->
   <div class="plan">
-    <div class="plan-name">🏢 Business</div>
-    <div class="plan-price">$49<span>/mo</span></div>
+    <div class="plan-icon">🏢</div>
+    <div class="plan-name">Business</div>
+    <div class="plan-desc">For agencies and teams deploying AI at scale across multiple sites.</div>
+    <div class="plan-price"><sup>$</sup>49<span>/mo</span></div>
+    <div class="plan-divider"></div>
     <ul class="plan-features">
-      <li>Unlimited agents</li>
-      <li>100,000 messages / month</li>
-      <li>All AI models</li>
-      <li>Embed on any site</li>
-      <li>Full analytics + exports</li>
-      <li>White-label (your domain)</li>
-      <li>Priority support + onboarding</li>
+      <li><span class="ck">✓</span> Unlimited agents</li>
+      <li><span class="ck">✓</span> 100,000 messages / month</li>
+      <li><span class="ck">✓</span> All AI models</li>
+      <li><span class="ck">✓</span> Embed on any site</li>
+      <li><span class="ck">✓</span> Full analytics + exports</li>
+      <li><span class="ck">✓</span> White-label (your domain)</li>
+      <li><span class="ck">✓</span> Priority support + onboarding</li>
     </ul>
-    {% if session.user_id %}
-    <a href="/billing/checkout/business" class="btn btn-outline" style="text-align:center;justify-content:center;">⚡ Upgrade to Business — $49/mo</a>
+    {% if session.get('user_id') %}
+    <a href="/billing/checkout/business" class="btn btn-outline" style="text-align:center;justify-content:center;width:100%;">⚡ Upgrade to Business</a>
     {% else %}
-    <a href="/signup" class="btn btn-outline" style="text-align:center;justify-content:center;">Start Business — $49/mo</a>
+    <a href="/signup" class="btn btn-outline" style="text-align:center;justify-content:center;width:100%;">Start Business — $49/mo →</a>
     {% endif %}
   </div>
 </div>
 
-</div>
-
-<!-- Done-for-you installation service -->
-<div style="max-width:640px;margin:0 auto 4rem;padding:0 2rem;">
-  <div style="background:linear-gradient(135deg,rgba(99,102,241,0.12),rgba(16,185,129,0.08));
-              border:1px solid rgba(99,102,241,0.3);border-radius:16px;padding:2rem;text-align:center;">
-    <div style="font-size:2rem;margin-bottom:10px;">🛠️</div>
-    <h2 style="font-size:1.3rem;font-weight:800;margin-bottom:8px;">Done-For-You Installation</h2>
-    <p style="color:#94a3b8;font-size:0.9rem;margin-bottom:1.25rem;line-height:1.6;">
-      Not a developer? No problem. Send us your website file and we'll install your AI agent for you — guaranteed within 24 hours.
-    </p>
-    <ul style="list-style:none;text-align:left;display:inline-flex;flex-direction:column;gap:8px;font-size:0.88rem;margin-bottom:1.5rem;">
-      <li>✅ We add the embed code to your .html file</li>
+<!-- ── INSTALL SERVICE ── -->
+<div style="padding:0 2rem;">
+  <div class="install-card">
+    <div class="install-badge">Done For You</div>
+    <h2>🛠️ Professional Installation</h2>
+    <p>Not a developer? No problem. Send us your website file and we'll install your AI agent — guaranteed within 24 hours.</p>
+    <ul class="install-perks">
+      <li>✅ We add the embed code to your HTML file</li>
       <li>✅ Tested and verified before delivery</li>
       <li>✅ Delivered within 24 hours</li>
       <li>✅ One-time fee, no recurring charge</li>
     </ul>
-    <div style="margin-bottom:1.25rem;">
-      <span style="font-size:2rem;font-weight:900;color:#6366f1;">$90</span>
-      <span style="color:#6b7280;font-size:0.9rem;"> one-time</span>
+    <div style="margin-bottom:1.5rem;">
+      <div class="install-price">$90 <span>one-time</span></div>
     </div>
     {% if session.get('user_id') %}
-    <a href="/billing/checkout/installation" class="btn btn-primary" style="justify-content:center;padding:12px 32px;font-size:1rem;">Get It Installed — $90 →</a>
+    <a href="/billing/checkout/installation" class="btn btn-primary btn-lg" style="justify-content:center;">Get It Installed — $90 →</a>
     {% else %}
-    <a href="/signup" class="btn btn-primary" style="justify-content:center;padding:12px 32px;font-size:1rem;">Sign Up &amp; Get Installed — $90 →</a>
+    <a href="/signup" class="btn btn-primary btn-lg" style="justify-content:center;">Sign Up &amp; Get Installed →</a>
     {% endif %}
   </div>
 </div>
 
-<div style="text-align:center;padding:0 2rem 4rem;color:#6b7280;font-size:0.88rem;">
-  All plans include your own OpenRouter API key — you control your AI costs directly.<br>
+<!-- ── FAQ ── -->
+<div class="faq">
+  <h2>Common Questions</h2>
+  <dl>
+    <div class="faq-item">
+      <dt>Do I need my own API key?</dt>
+      <dd>Yes — you bring your own OpenRouter API key. This means you control your AI costs directly and we never markup your usage.</dd>
+    </div>
+    <div class="faq-item">
+      <dt>Can I switch plans anytime?</dt>
+      <dd>Yes. Upgrade or downgrade at any time. Changes take effect immediately.</dd>
+    </div>
+    <div class="faq-item">
+      <dt>What happens if I exceed my message limit?</dt>
+      <dd>Your agent will pause until the next billing cycle. Upgrade anytime to keep it running without interruption.</dd>
+    </div>
+    <div class="faq-item">
+      <dt>Is my API key secure?</dt>
+      <dd>Yes. Your key is encrypted at rest and never exposed to end users. It's only used server-side to call OpenRouter on your behalf.</dd>
+    </div>
+    <div class="faq-item">
+      <dt>Can I embed on multiple websites?</dt>
+      <dd>Yes, on any paid plan. You can control which origins are allowed per agent using our CORS origin control.</dd>
+    </div>
+  </dl>
+</div>
+
+<div style="text-align:center;padding:0 2rem 4rem;color:#4b5563;font-size:0.85rem;">
+  All plans use your own OpenRouter API key — you control your AI costs.
   Questions? <a href="mailto:emporiumandthrift@gmail.com" style="color:#6366f1;">emporiumandthrift@gmail.com</a>
 </div>
+
 {% endblock %}

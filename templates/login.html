@@ -1,12 +1,49 @@
 {% extends "base.html" %}
 {% block title %}Login — Alexander AI Agent{% endblock %}
+{% block extra_css %}
+<style>
+  .auth-wrap{
+    min-height:calc(100vh - 64px);
+    display:flex;align-items:center;justify-content:center;
+    padding:2rem;position:relative;overflow:hidden;
+  }
+  .orb{position:absolute;border-radius:50%;filter:blur(80px);pointer-events:none;}
+  .auth-card{
+    width:100%;max-width:440px;
+    background:#0a0a14;
+    border:1px solid rgba(255,255,255,0.07);
+    border-radius:20px;padding:2.5rem;
+    position:relative;z-index:1;
+    box-shadow:0 0 60px rgba(0,0,0,0.5);
+  }
+  .auth-logo{text-align:center;margin-bottom:2rem;}
+  .auth-logo-icon{
+    width:52px;height:52px;border-radius:14px;
+    background:linear-gradient(135deg,#6366f1,#8b5cf6);
+    display:flex;align-items:center;justify-content:center;
+    font-size:1.5rem;margin:0 auto 1rem;
+    box-shadow:0 0 24px rgba(99,102,241,0.4);
+  }
+  .auth-card h1{font-size:1.5rem;font-weight:800;margin-bottom:0.35rem;text-align:center;}
+  .auth-card .sub{color:#6b7280;font-size:0.875rem;text-align:center;margin-bottom:2rem;}
+  .form-divider{display:flex;align-items:center;gap:12px;margin:1.5rem 0;color:#374151;font-size:0.8rem;}
+  .form-divider::before,.form-divider::after{content:'';flex:1;height:1px;background:rgba(255,255,255,0.06);}
+</style>
+{% endblock %}
+
 {% block content %}
-<div class="container-sm" style="padding-top:3rem;">
-  <div class="card">
-    <h1 style="font-size:1.5rem;font-weight:800;margin-bottom:0.25rem;">Welcome back</h1>
-    <p style="color:#6b7280;font-size:0.9rem;margin-bottom:1.5rem;">Sign in to your account.</p>
+<div class="auth-wrap">
+  <div class="orb" style="width:500px;height:500px;background:radial-gradient(circle,rgba(99,102,241,0.1),transparent 70%);top:-100px;left:50%;transform:translateX(-50%);"></div>
+
+  <div class="auth-card">
+    <div class="auth-logo">
+      <div class="auth-logo-icon">🤖</div>
+      <h1>Welcome back</h1>
+      <p class="sub">Sign in to your Alexander AI account</p>
+    </div>
+
     <form method="POST" action="/login" autocomplete="on">
-  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
       <div class="form-group">
         <label>Email Address</label>
@@ -19,13 +56,20 @@
           <button type="button" class="eye-btn">👁️</button>
         </div>
       </div>
-      <button type="submit" class="btn btn-primary" style="width:100%;justify-content:center;padding:11px;">Sign In →</button>
+
+      <button type="submit" class="btn btn-primary" style="width:100%;justify-content:center;padding:13px;font-size:0.95rem;margin-top:0.5rem;">
+        Sign In →
+      </button>
     </form>
-    <p style="text-align:center;margin-top:0.75rem;font-size:0.85rem;">
-      <a href="/forgot-password" style="color:#6366f1;">Forgot your password?</a>
+
+    <p style="text-align:center;margin-top:1.25rem;font-size:0.83rem;">
+      <a href="/forgot-password" style="color:#6b7280;transition:color 0.15s;" onmouseover="this.style.color='#a5b4fc'" onmouseout="this.style.color='#6b7280'">Forgot your password?</a>
     </p>
-    <p style="text-align:center;margin-top:0.5rem;font-size:0.88rem;color:#6b7280;">
-      Don't have an account? <a href="/signup" style="color:#6366f1;">Sign up free</a>
+
+    <div class="form-divider">or</div>
+
+    <p style="text-align:center;font-size:0.875rem;color:#6b7280;">
+      No account yet? <a href="/signup" style="color:#a5b4fc;font-weight:600;">Create one free →</a>
     </p>
   </div>
 </div>
