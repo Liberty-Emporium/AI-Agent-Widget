@@ -31,6 +31,23 @@
   .priority-sla{font-size:0.75rem;color:#6b7280;margin-top:3px;}
 </style>
 {% endblock %}
+{% block help_content %}
+<h3>What is this page?</h3>
+<p>Tickets are conversations the AI couldn't resolve and escalated to a human. Every ticket is a customer waiting — respond fast.</p>
+<h3>Working the Queue</h3>
+<ul>
+  <li><strong>New / Open</strong> — customer is waiting. Reply within 1 hour during business hours</li>
+  <li><strong>In Progress</strong> — you've started the conversation</li>
+  <li><strong>Resolved</strong> — issue handled, customer satisfied</li>
+</ul>
+<h3>Turning Tickets Into Sales</h3>
+<ul>
+  <li>Ticket subjects reveal your agent's blind spots — add those answers to Knowledge Base</li>
+  <li>Many tickets are buying-intent questions — treat them as warm leads</li>
+  <li>A fast, helpful reply often converts into a paying customer</li>
+</ul>
+<div class="help-tip">Emergency-priority tickets (red) first — always.</div>
+{% endblock %}
 {% block content %}
 <div class="container">
   <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:1rem;margin-bottom:2rem;">

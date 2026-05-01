@@ -1,5 +1,23 @@
 {% extends "base.html" %}
 {% block title %}Analytics — {{ agent.name }}{% endblock %}
+{% block help_content %}
+<h3>What is this page?</h3>
+<p>Analytics shows how your agent is performing — chat volume, what people ask, and whether customers leave satisfied.</p>
+<h3>Key Metrics</h3>
+<ul>
+  <li><strong>Total Chats</strong> — volume of conversations started</li>
+  <li><strong>Resolved Rate</strong> — % the agent answered without escalating to human</li>
+  <li><strong>Top Questions</strong> — what customers ask most (gold for improving KB)</li>
+  <li><strong>Satisfaction Score</strong> — thumbs up/down ratings</li>
+</ul>
+<h3>Using This to Improve Sales</h3>
+<ul>
+  <li>Low resolved rate → add more KB entries for unanswered topics</li>
+  <li>High chat volume on a topic → feature that product more on your site</li>
+  <li>Low satisfaction → review actual chat logs and refine agent tone</li>
+</ul>
+<div class="help-tip">Check analytics every Monday. One KB update per week compounds into a much better agent over time.</div>
+{% endblock %}
 {% block content %}
 <div class="container">
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:2rem;flex-wrap:wrap;gap:1rem;">

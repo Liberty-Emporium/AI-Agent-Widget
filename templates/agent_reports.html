@@ -83,6 +83,23 @@
 </style>
 {% endblock %}
 
+{% block help_content %}
+<h3>What is this page?</h3>
+<p>Chat Intelligence Reports give deeper analysis of conversations — topic clusters, knowledge gaps, and health insights.</p>
+<h3>The Three Reports</h3>
+<ul>
+  <li><strong>Topic Report</strong> — clusters conversations by subject to show what customers care about most</li>
+  <li><strong>Health Report</strong> — flags conversations where the agent struggled or went off-topic</li>
+  <li><strong>Gap Report</strong> — surfaces questions the agent couldn't answer well, ranked by frequency</li>
+</ul>
+<h3>How to Use These</h3>
+<ul>
+  <li>Run Gap Report monthly — top 5 gaps become your next 5 Knowledge Base entries</li>
+  <li>Topic Report tells you what customers actually want (use for marketing too)</li>
+  <li>Health Report red flags = agent needs retraining. Review those chats manually</li>
+</ul>
+<div class="help-tip">A healthy agent resolves 80%+ of chats. Use these reports to track and hit that benchmark.</div>
+{% endblock %}
 {% block content %}
 <div class="container" style="max-width:860px;padding-top:2rem;">
 

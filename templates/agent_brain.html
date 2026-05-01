@@ -55,6 +55,24 @@
 </style>
 {% endblock %}
 
+{% block help_content %}
+<h3>What is this page?</h3>
+<p>The Brain Editor defines your agent's personality, name, and core instructions — the "who is this agent?" config.</p>
+<h3>What to Configure</h3>
+<ul>
+  <li><strong>Agent Name</strong> — what the widget calls itself (e.g., "Aria", "Support Bot")</li>
+  <li><strong>System Prompt</strong> — describe how it should behave: "You are a friendly assistant for [Business]. You help with [topics]. Be warm and concise."</li>
+  <li><strong>Greeting Message</strong> — first thing it says when the widget opens</li>
+  <li><strong>Fallback Message</strong> — what to say when it doesn't know the answer</li>
+</ul>
+<h3>Writing a Good Prompt</h3>
+<ul>
+  <li>Say who it is, what business it's for, what topics it covers</li>
+  <li>Include what NOT to do (e.g., "never discuss competitors")</li>
+  <li>Set the tone: professional, casual, enthusiastic</li>
+</ul>
+<div class="help-tip">Keep the system prompt under 300 words. Shorter, clearer instructions produce more consistent responses.</div>
+{% endblock %}
 {% block content %}
 <div class="container-sm" style="max-width:780px;padding-top:2rem;">
 

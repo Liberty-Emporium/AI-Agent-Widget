@@ -1,5 +1,22 @@
 {% extends "base.html" %}
 {% block title %}Dashboard — Alexander AI Agent{% endblock %}
+{% block help_content %}
+<h3>What is this page?</h3>
+<p>Your Agent Dashboard shows all the AI chat agents you've created. Each card is a separate agent you can customize, train, and embed on a website.</p>
+<h3>Getting Your Agent Live</h3>
+<ul>
+  <li><strong>Create an Agent</strong> — Click <em>+ New Agent</em>, give it a name and persona</li>
+  <li><strong>Train it</strong> — Click the agent card → Knowledge Base, add FAQs and info about your business</li>
+  <li><strong>Embed it</strong> — Click the agent → copy the embed code → paste into your website HTML</li>
+  <li><strong>Go live</strong> — Your widget appears on your site immediately after embedding</li>
+</ul>
+<h3>Monitoring Performance</h3>
+<ul>
+  <li>Click <strong>Analytics</strong> on any agent to see chat volume, top questions, and satisfaction scores</li>
+  <li>Click <strong>Tickets</strong> to see conversations the agent escalated to humans</li>
+</ul>
+<div class="help-tip">The more you train your agent, the better it answers. Add at least 10 knowledge base entries before going live.</div>
+{% endblock %}
 {% block content %}
 <style>
   .dash-header{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:1rem;margin-bottom:2rem;}
