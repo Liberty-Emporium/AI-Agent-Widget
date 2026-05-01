@@ -73,10 +73,12 @@
       width:56px; height:56px; border-radius:50%;
       background:${COLOR}; color:#fff; font-size:26px;
       display:flex; align-items:center; justify-content:center;
-      cursor:pointer; box-shadow:0 4px 20px rgba(0,0,0,.25);
+      cursor:grab; box-shadow:0 4px 20px rgba(0,0,0,.25);
       border:none; transition:transform .2s,box-shadow .2s; font-family:inherit;
+      user-select:none; -webkit-user-select:none;
     }
     #aai-bubble:hover { transform:scale(1.08); box-shadow:0 6px 28px rgba(0,0,0,.3); }
+    #aai-bubble.dragging { cursor:grabbing; transform:scale(1.12); box-shadow:0 8px 32px rgba(0,0,0,.4); transition:none; }
 
     #aai-window {
       position:fixed; bottom:92px; right:24px; z-index:99998;
@@ -435,7 +437,131 @@
     saveState();
   }
 
-  bubble.addEventListener('click', toggleChat);
+  // ── Drag-to-move bubble ──────────────────────────────────────────
+  var POS_KEY = 'aai_pos_' + AGENT_ID;
+  var bubblePos = {};
+  try { bubblePos = JSON.parse(localStorage.getItem(POS_KEY) || '{}'); } catch(e) {}
+
+  function applyBubblePos(pos) {
+    // Always position using bottom+right so it stays in a corner
+    // but we convert to top+left internally for free-form dragging
+    bubble.style.bottom = 'auto';
+    bubble.style.right  = 'auto';
+    bubble.style.top    = pos.top  + 'px';
+    bubble.style.left   = pos.left + 'px';
+    positionWindow(pos);
+  }
+
+  function positionWindow(pos) {
+    if (!win) return;
+    var bw = 56, ww = 360, wh = 520;
+    var vw = window.innerWidth, vh = window.innerHeight;
+    var bt = pos.top, bl = pos.left;
+    // Prefer showing window above bubble, left-aligned to bubble
+    var wt = bt - wh - 10;
+    var wl = bl;
+    // Clamp window inside viewport
+    if (wt < 8) wt = bt + bw + 10;
+    if (wl + ww > vw - 8) wl = vw - ww - 8;
+    if (wl < 8) wl = 8;
+    if (wt + wh > vh - 8) wt = vh - wh - 8;
+    if (wt < 8) wt = 8;
+    win.style.bottom = 'auto';
+    win.style.right  = 'auto';
+    win.style.top    = wt + 'px';
+    win.style.left   = wl + 'px';
+  }
+
+  // Restore saved position or use default bottom-right
+  if (bubblePos.top !== undefined && bubblePos.left !== undefined) {
+    // Clamp saved position in case screen size changed
+    var _vw = window.innerWidth, _vh = window.innerHeight;
+    bubblePos.top  = Math.max(8, Math.min(bubblePos.top,  _vh - 64));
+    bubblePos.left = Math.max(8, Math.min(bubblePos.left, _vw - 64));
+    applyBubblePos(bubblePos);
+  }
+
+  var _dragging = false, _dragStartX, _dragStartY, _origLeft, _origTop, _didDrag;
+
+  bubble.addEventListener('mousedown', function(e) {
+    if (e.button !== 0) return;
+    _dragging  = true;
+    _didDrag   = false;
+    _dragStartX = e.clientX;
+    _dragStartY = e.clientY;
+    var rect    = bubble.getBoundingClientRect();
+    _origLeft   = rect.left;
+    _origTop    = rect.top;
+    bubble.classList.add('dragging');
+    e.preventDefault();
+  });
+
+  bubble.addEventListener('touchstart', function(e) {
+    var t = e.touches[0];
+    _dragging   = true;
+    _didDrag    = false;
+    _dragStartX = t.clientX;
+    _dragStartY = t.clientY;
+    var rect    = bubble.getBoundingClientRect();
+    _origLeft   = rect.left;
+    _origTop    = rect.top;
+    bubble.classList.add('dragging');
+  }, {passive: true});
+
+  function onDragMove(cx, cy) {
+    if (!_dragging) return;
+    var dx = cx - _dragStartX, dy = cy - _dragStartY;
+    if (Math.abs(dx) > 4 || Math.abs(dy) > 4) _didDrag = true;
+    if (!_didDrag) return;
+    var vw = window.innerWidth, vh = window.innerHeight;
+    var nl = Math.max(8, Math.min(_origLeft + dx, vw - 64));
+    var nt = Math.max(8, Math.min(_origTop  + dy, vh - 64));
+    bubble.style.top  = nt + 'px';
+    bubble.style.left = nl + 'px';
+    bubble.style.bottom = 'auto';
+    bubble.style.right  = 'auto';
+    if (open) positionWindow({top: nt, left: nl});
+  }
+
+  function onDragEnd(cx, cy) {
+    if (!_dragging) return;
+    _dragging = false;
+    bubble.classList.remove('dragging');
+    var rect = bubble.getBoundingClientRect();
+    var pos  = {top: rect.top, left: rect.left};
+    // Snap to nearest edge (left or right half)
+    var vw = window.innerWidth;
+    if (rect.left + 28 > vw / 2) {
+      pos.left = vw - 64 - 8;
+    } else {
+      pos.left = 8;
+    }
+    bubble.style.left = pos.left + 'px';
+    if (open) positionWindow(pos);
+    bubblePos = pos;
+    try { localStorage.setItem(POS_KEY, JSON.stringify(pos)); } catch(e) {}
+  }
+
+  document.addEventListener('mousemove', function(e) { onDragMove(e.clientX, e.clientY); });
+  document.addEventListener('mouseup',   function(e) { onDragEnd(e.clientX, e.clientY); });
+  document.addEventListener('touchmove', function(e) {
+    var t = e.touches[0]; onDragMove(t.clientX, t.clientY);
+  }, {passive: true});
+  document.addEventListener('touchend', function(e) {
+    var t = e.changedTouches[0]; onDragEnd(t.clientX, t.clientY);
+  });
+
+  window.addEventListener('resize', function() {
+    if (bubblePos.top !== undefined) {
+      var vw = window.innerWidth, vh = window.innerHeight;
+      bubblePos.top  = Math.max(8, Math.min(bubblePos.top,  vh - 64));
+      bubblePos.left = Math.max(8, Math.min(bubblePos.left, vw - 64));
+      applyBubblePos(bubblePos);
+    }
+  });
+  // ────────────────────────────────────────────────────────────────────
+
+  bubble.addEventListener('click', function() { if (!_didDrag) toggleChat(); });
   document.getElementById('aai-close').addEventListener('click', toggleChat);
   document.getElementById('aai-hist-btn').addEventListener('click', toggleHistPanel);
   document.getElementById('aai-new-chat').addEventListener('click', startNewChat);
