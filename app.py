@@ -32,6 +32,20 @@ STRIPE_PRICE_BUSINESS = os.environ.get('STRIPE_PRICE_BUSINESS', '')  # $49/mo
 
 app = Flask(__name__)
 
+# ── EcDash network client (Phase 2 + 3) ───────────────────────────────────
+try:
+    from ecdash_client import init_app as _ecdash_init, call_app as _call_app, get_app_status as _get_app_status
+    _ecdash_init(app, 'AI Agent Widget')
+except ImportError:
+    _ecdash_init = None
+    def _call_app(*a, **kw): return None
+    def _get_app_status(*a, **kw): return None
+
+APP_NAME    = 'AI Agent Widget'
+APP_VERSION = '1.0'
+import time as _uptime_time
+_APP_START_TIME = _uptime_time.time()
+
 def _get_secret_key():
     env_key = os.environ.get('SECRET_KEY')
     if env_key:
@@ -2689,3 +2703,57 @@ def kys_pending_notification():
 
 if __name__ == '__main__':
     app.run(debug=False, port=5000)
+
+# ── Phase 3: Standardized /api/status ─────────────────────────────────────────
+@app.route('/api/status', methods=['GET'])
+def api_status():
+    """Liberty-Emporium network: standardized status endpoint."""
+    from datetime import datetime, timezone
+    uptime = int(_uptime_time.time() - _APP_START_TIME)
+    def _fmt(s):
+        if s < 60:   return f"{s}s"
+        if s < 3600: return f"{s//60}m {s%60}s"
+        return f"{s//3600}h {(s%3600)//60}m"
+    try:
+        db     = get_db()
+        agents = db.execute('SELECT COUNT(*) FROM agents').fetchone()[0]
+        msgs   = db.execute('SELECT COUNT(*) FROM messages').fetchone()[0]
+        stats  = {'total_agents': agents, 'total_messages': msgs}
+    except Exception as e:
+        stats = {'error': str(e)}
+    return jsonify({
+        'app':            APP_NAME,
+        'version':        APP_VERSION,
+        'healthy':        True,
+        'uptime_seconds': uptime,
+        'uptime_human':   _fmt(uptime),
+        'stats':          stats,
+        'network':        'liberty-emporium',
+        'ts':             datetime.now(timezone.utc).isoformat(),
+    })
+
+# ── Phase 3: /api/network-status — query all apps at once ─────────────────────
+@app.route('/api/network-status', methods=['GET'])
+def api_network_status():
+    """Query all Liberty-Emporium apps for status in parallel."""
+    import threading as _th
+    apps    = ['FloodClaim Pro', 'Pet Vet AI', 'Sweet Spot Cakes',
+               'Contractor Pro AI', 'Drop Shipping', 'Consignment',
+               'Liberty Inventory', 'GymForge', 'Liberty Oil']
+    results = {}
+    lock    = _th.Lock()
+    def _fetch(name):
+        status = _get_app_status(name)
+        with lock:
+            results[name] = status or {'healthy': False, 'error': 'unreachable'}
+    threads = [_th.Thread(target=_fetch, args=(a,), daemon=True) for a in apps]
+    for t in threads: t.start()
+    for t in threads: t.join(timeout=10)
+    healthy = sum(1 for v in results.values() if v.get('healthy'))
+    return jsonify({
+        'network':      'liberty-emporium',
+        'apps_queried': len(apps),
+        'apps_healthy': healthy,
+        'apps_down':    len(apps) - healthy,
+        'results':      results,
+    })
