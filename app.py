@@ -1221,6 +1221,12 @@ def agent_brain_public(agent_id):
     """Token-protected brain export — for EcDash brain sync."""
     sync_token = os.environ.get('BRAIN_SYNC_TOKEN', '')
     if not sync_token:
+        try:
+            from ecdash_client import get_secret
+            sync_token = get_secret('Brain Sync Token', '')
+        except Exception:
+            pass
+    if not sync_token:
         return jsonify({'error': 'sync not configured'}), 503
     auth = request.headers.get('X-Brain-Sync-Token', '')
     if not auth or auth != sync_token:
@@ -1966,7 +1972,14 @@ seed_echo_agent()
 @app.route('/api/echo-brain-id', methods=['GET'])
 def echo_brain_id():
     """Token-protected endpoint — returns Echo Brain agent ID for bootstrap/brain sync."""
+    # Phase 2: pull token from EcDash vault if not in env
     sync_token = os.environ.get('BRAIN_SYNC_TOKEN', '')
+    if not sync_token:
+        try:
+            from ecdash_client import get_secret
+            sync_token = get_secret('Brain Sync Token', '')
+        except Exception:
+            pass
     if not sync_token:
         return jsonify({'error': 'sync not configured'}), 503
     auth = request.headers.get('X-Brain-Sync-Token', '')
