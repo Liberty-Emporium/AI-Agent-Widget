@@ -1963,6 +1963,29 @@ def seed_echo_agent():
 seed_echo_agent()
 
 
+@app.route('/api/echo-brain-id', methods=['GET'])
+def echo_brain_id():
+    """Token-protected endpoint — returns Echo Brain agent ID for bootstrap/brain sync."""
+    sync_token = os.environ.get('BRAIN_SYNC_TOKEN', '')
+    if not sync_token:
+        return jsonify({'error': 'sync not configured'}), 503
+    auth = request.headers.get('X-Brain-Sync-Token', '')
+    if not auth or auth != sync_token:
+        return jsonify({'error': 'unauthorized'}), 401
+    db = get_db()
+    admin = db.execute('SELECT id FROM users WHERE email=?', (ADMIN_EMAIL,)).fetchone()
+    if not admin:
+        return jsonify({'error': 'admin not found'}), 404
+    agent = db.execute(
+        "SELECT id, name FROM agents WHERE user_id=? AND name='Echo Brain'",
+        (admin['id'],)
+    ).fetchone()
+    if not agent:
+        return jsonify({'error': 'Echo Brain agent not found'}), 404
+    return jsonify({'agent_id': agent['id'], 'name': agent['name']})
+
+
+
 CAKELY_SYSTEM_PROMPT = """You are Cakely \U0001f382, the AI assistant built into Sweet Spot Custom Cakes bakery management system.
 
 You help bakery staff with:
