@@ -1334,8 +1334,18 @@ def agent_brain_update(agent_id):
     agent    = db.execute('SELECT * FROM agents WHERE id=?', (agent_id,)).fetchone()
     if not agent:
         return jsonify({'error': 'not found'}), 404
+    # Accept brain_sync_token as an alternative auth method (for Echo bootstrap)
+    sync_token = os.environ.get('BRAIN_SYNC_TOKEN', '')
+    if not sync_token:
+        try:
+            from ecdash_client import get_secret
+            sync_token = get_secret('Brain Sync Token', '')
+        except Exception:
+            pass
+    header_token = request.headers.get('X-Brain-Sync-Token', '')
+    is_sync_auth = sync_token and (token == sync_token or header_token == sync_token)
     # Verify with agent api_key as token (the app must know its own key)
-    if token != agent['api_key']:
+    if not is_sync_auth and token != agent['api_key']:
         return jsonify({'error': 'unauthorized'}), 401
     updated = []
     for field in ['memory_md', 'identity_md', 'soul_md', 'system_prompt', 'name', 'tagline']:
