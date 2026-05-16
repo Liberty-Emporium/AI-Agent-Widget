@@ -215,7 +215,7 @@
   {% if messages %}
   <div class="flash-container" style="margin-top:1rem;">
     {% for cat, msg in messages %}
-      <div class="flash {{ cat }}">{{ msg }}</div>
+      <div class="flash {{ cat }}">{{ msg | urlize | safe }}</div>
     {% endfor %}
   </div>
   {% endif %}

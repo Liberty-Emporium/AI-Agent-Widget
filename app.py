@@ -748,36 +748,39 @@ EMAIL_FROM      = os.environ.get('EMAIL_FROM', 'Alexander AI <noreply@alexandera
 EMAIL_FROM_NAME = os.environ.get('EMAIL_FROM_NAME', 'Alexander AI')
 
 def _send_email_worker(to_addr, subject, html_body, text_body=None):
-    """Send via Brevo SMTP SSL on port 465 — works on Railway."""
+    """Send via Brevo SMTP SSL port 465. Raises on failure."""
     import smtplib, ssl
     from email.mime.multipart import MIMEMultipart
     from email.mime.text import MIMEText
-    try:
-        msg = MIMEMultipart('alternative')
-        msg['Subject'] = subject
-        msg['From']    = EMAIL_FROM
-        msg['To']      = to_addr
-        if text_body:
-            msg.attach(MIMEText(text_body, 'plain'))
-        msg.attach(MIMEText(html_body, 'html'))
-        ctx = ssl.create_default_context()
-        with smtplib.SMTP_SSL('smtp-relay.brevo.com', 465, context=ctx, timeout=15) as server:
-            server.login(BREVO_SMTP_USER, BREVO_SMTP_PASS)
-            server.sendmail(EMAIL_FROM, [to_addr], msg.as_string())
-        app.logger.info(f'Email sent to {to_addr} via Brevo SMTP SSL')
-    except Exception as e:
-        app.logger.error(f'Email send error: {e}')
+    msg = MIMEMultipart('alternative')
+    msg['Subject'] = subject
+    msg['From']    = EMAIL_FROM
+    msg['To']      = to_addr
+    if text_body:
+        msg.attach(MIMEText(text_body, 'plain'))
+    msg.attach(MIMEText(html_body, 'html'))
+    ctx = ssl.create_default_context()
+    with smtplib.SMTP_SSL('smtp-relay.brevo.com', 465, context=ctx, timeout=12) as server:
+        server.login(BREVO_SMTP_USER, BREVO_SMTP_PASS)
+        server.sendmail(EMAIL_FROM, [to_addr], msg.as_string())
+    app.logger.info(f'Email sent to {to_addr} via Brevo SMTP SSL')
 
 def send_email(to_addr, subject, html_body, text_body=None):
-    """Send email in background thread — never blocks the request."""
+    """Send email, wait up to 13s for result. Returns True/False."""
     if not BREVO_SMTP_USER or not BREVO_SMTP_PASS:
-        app.logger.warning('BREVO_SMTP_USER/PASS not configured — email not sent')
+        app.logger.warning('BREVO_SMTP credentials not configured')
         return False
-    t = threading.Thread(target=_send_email_worker,
-                         args=(to_addr, subject, html_body, text_body),
-                         daemon=True)
+    result = [False]
+    def worker():
+        try:
+            _send_email_worker(to_addr, subject, html_body, text_body)
+            result[0] = True
+        except Exception as e:
+            app.logger.error(f'Email send error: {e}')
+    t = threading.Thread(target=worker, daemon=True)
     t.start()
-    return True
+    t.join(timeout=13)
+    return result[0]
 
 # ── Password reset ────────────────────────────────────────────────────────────
 
@@ -817,7 +820,8 @@ def forgot_password():
             if sent:
                 flash('Password reset link sent — check your email.', 'success')
             else:
-                flash(f'Reset link (SMTP not configured): {reset_url}', 'success')
+                # Email delivery failed — show the link directly so the user can still reset
+                flash(f'Could not send email. Click this link to reset your password: {reset_url}', 'success')
         else:
             flash('If that email exists, a reset link has been sent.', 'success')
         return redirect(url_for('forgot_password'))
