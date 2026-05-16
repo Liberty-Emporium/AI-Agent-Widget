@@ -751,11 +751,8 @@ SMTP_USER     = os.environ.get('SMTP_USER', '')
 SMTP_PASSWORD = os.environ.get('SMTP_PASSWORD', '')
 SMTP_FROM     = os.environ.get('SMTP_FROM', '') or SMTP_USER
 
-def send_email(to_addr, subject, html_body, text_body=None):
-    """Send an email via SMTP. Returns True on success, False on failure."""
-    if not SMTP_USER or not SMTP_PASSWORD:
-        app.logger.warning('SMTP not configured — email not sent')
-        return False
+def _send_email_worker(to_addr, subject, html_body, text_body=None):
+    """Blocking SMTP send — always call via send_email() for async dispatch."""
     try:
         msg = MIMEMultipart('alternative')
         msg['Subject'] = subject
@@ -764,16 +761,25 @@ def send_email(to_addr, subject, html_body, text_body=None):
         if text_body:
             msg.attach(MIMEText(text_body, 'plain'))
         msg.attach(MIMEText(html_body, 'html'))
-        with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as server:
+        with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=15) as server:
             server.ehlo()
             server.starttls()
             server.login(SMTP_USER, SMTP_PASSWORD)
             server.sendmail(SMTP_USER, to_addr, msg.as_string())
         app.logger.info(f'Email sent to {to_addr}: {subject}')
-        return True
     except Exception as e:
         app.logger.error(f'Email send error: {e}')
+
+def send_email(to_addr, subject, html_body, text_body=None):
+    """Send email in background thread — never blocks the request."""
+    if not SMTP_USER or not SMTP_PASSWORD:
+        app.logger.warning('SMTP not configured — email not sent')
         return False
+    t = threading.Thread(target=_send_email_worker,
+                         args=(to_addr, subject, html_body, text_body),
+                         daemon=True)
+    t.start()
+    return True
 
 # ── Password reset ────────────────────────────────────────────────────────────
 
