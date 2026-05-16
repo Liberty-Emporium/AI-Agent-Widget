@@ -740,6 +740,41 @@ def logout():
     session.clear()
     return redirect(url_for('index'))
 
+# ── Email sending ────────────────────────────────────────────────────────────
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+
+SMTP_HOST     = os.environ.get('SMTP_HOST', 'smtp.gmail.com')
+SMTP_PORT     = int(os.environ.get('SMTP_PORT', '587'))
+SMTP_USER     = os.environ.get('SMTP_USER', '')
+SMTP_PASSWORD = os.environ.get('SMTP_PASSWORD', '')
+SMTP_FROM     = os.environ.get('SMTP_FROM', '') or SMTP_USER
+
+def send_email(to_addr, subject, html_body, text_body=None):
+    """Send an email via SMTP. Returns True on success, False on failure."""
+    if not SMTP_USER or not SMTP_PASSWORD:
+        app.logger.warning('SMTP not configured — email not sent')
+        return False
+    try:
+        msg = MIMEMultipart('alternative')
+        msg['Subject'] = subject
+        msg['From']    = SMTP_FROM
+        msg['To']      = to_addr
+        if text_body:
+            msg.attach(MIMEText(text_body, 'plain'))
+        msg.attach(MIMEText(html_body, 'html'))
+        with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as server:
+            server.ehlo()
+            server.starttls()
+            server.login(SMTP_USER, SMTP_PASSWORD)
+            server.sendmail(SMTP_USER, to_addr, msg.as_string())
+        app.logger.info(f'Email sent to {to_addr}: {subject}')
+        return True
+    except Exception as e:
+        app.logger.error(f'Email send error: {e}')
+        return False
+
 # ── Password reset ────────────────────────────────────────────────────────────
 
 # In-memory token store: {token: {email, expires}}
@@ -761,9 +796,24 @@ def forgot_password():
             }
             reset_url = f"{request.host_url.rstrip('/')}/reset-password/{token}"
             app.logger.info(f'Password reset requested for {email}: {reset_url}')
-            # TODO: send email when SMTP is configured
-            # For now, flash the link so Jay can test (remove in production)
-            flash(f'Reset link (dev mode — add SMTP to send email): {reset_url}', 'success')
+            html_body = f"""
+            <div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:32px;">
+              <h2 style="color:#6366f1;">Reset your password</h2>
+              <p>We received a request to reset your Alexander AI Agent password.</p>
+              <p style="margin:24px 0;">
+                <a href="{reset_url}" style="background:#6366f1;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:700;">Reset Password</a>
+              </p>
+              <p style="color:#6b7280;font-size:0.85rem;">This link expires in 1 hour. If you didn't request this, ignore this email.</p>
+              <hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0;">
+              <p style="color:#9ca3af;font-size:0.8rem;">Alexander AI Agent &mdash; <a href="https://ai.widget.alexanderai.site">ai.widget.alexanderai.site</a></p>
+            </div>
+            """
+            text_body = f"Reset your Alexander AI Agent password:\n\n{reset_url}\n\nThis link expires in 1 hour."
+            sent = send_email(email, 'Reset your Alexander AI Agent password', html_body, text_body)
+            if sent:
+                flash('Password reset link sent — check your email.', 'success')
+            else:
+                flash(f'Reset link (SMTP not configured): {reset_url}', 'success')
         else:
             flash('If that email exists, a reset link has been sent.', 'success')
         return redirect(url_for('forgot_password'))
