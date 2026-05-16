@@ -741,49 +741,38 @@ def logout():
     return redirect(url_for('index'))
 
 # ── Email sending ────────────────────────────────────────────────────────────
-BREVO_API_KEY  = os.environ.get('BREVO_API_KEY', '')
-EMAIL_FROM     = os.environ.get('EMAIL_FROM', 'Alexander AI <noreply@alexanderai.site>')
+# Brevo SMTP credentials (not IP-restricted unlike the API key)
+BREVO_SMTP_USER = os.environ.get('BREVO_SMTP_USER', '')
+BREVO_SMTP_PASS = os.environ.get('BREVO_SMTP_PASS', '')
+EMAIL_FROM      = os.environ.get('EMAIL_FROM', 'Alexander AI <noreply@alexanderai.site>')
 EMAIL_FROM_NAME = os.environ.get('EMAIL_FROM_NAME', 'Alexander AI')
 
-def _parse_from(from_str):
-    """Parse 'Name <email>' into (name, email) tuple."""
-    if '<' in from_str and '>' in from_str:
-        name = from_str[:from_str.index('<')].strip()
-        email = from_str[from_str.index('<')+1:from_str.index('>')].strip()
-        return name, email
-    return EMAIL_FROM_NAME, from_str.strip()
-
 def _send_email_worker(to_addr, subject, html_body, text_body=None):
-    """Send via Brevo transactional email API."""
+    """Send via Brevo SMTP — no IP restriction."""
+    import smtplib
+    from email.mime.multipart import MIMEMultipart
+    from email.mime.text import MIMEText
     try:
-        from_name, from_email = _parse_from(EMAIL_FROM)
-        payload = json.dumps({
-            'sender': {'name': from_name, 'email': from_email},
-            'to': [{'email': to_addr}],
-            'subject': subject,
-            'htmlContent': html_body,
-            'textContent': text_body or '',
-        }).encode('utf-8')
-        req = urllib.request.Request(
-            'https://api.brevo.com/v3/smtp/email',
-            data=payload,
-            headers={
-                'api-key': BREVO_API_KEY,
-                'Content-Type': 'application/json',
-                'Accept': 'application/json',
-            },
-            method='POST'
-        )
-        with _safe_urlopen(req, timeout=15) as resp:
-            result = json.loads(resp.read().decode())
-        app.logger.info(f'Email sent to {to_addr} via Brevo: {result.get("messageId")}')
+        msg = MIMEMultipart('alternative')
+        msg['Subject'] = subject
+        msg['From']    = EMAIL_FROM
+        msg['To']      = to_addr
+        if text_body:
+            msg.attach(MIMEText(text_body, 'plain'))
+        msg.attach(MIMEText(html_body, 'html'))
+        with smtplib.SMTP('smtp-relay.brevo.com', 587, timeout=15) as server:
+            server.ehlo()
+            server.starttls()
+            server.login(BREVO_SMTP_USER, BREVO_SMTP_PASS)
+            server.sendmail(EMAIL_FROM, [to_addr], msg.as_string())
+        app.logger.info(f'Email sent to {to_addr} via Brevo SMTP')
     except Exception as e:
         app.logger.error(f'Email send error: {e}')
 
 def send_email(to_addr, subject, html_body, text_body=None):
     """Send email in background thread — never blocks the request."""
-    if not BREVO_API_KEY:
-        app.logger.warning('BREVO_API_KEY not configured — email not sent')
+    if not BREVO_SMTP_USER or not BREVO_SMTP_PASS:
+        app.logger.warning('BREVO_SMTP_USER/PASS not configured — email not sent')
         return False
     t = threading.Thread(target=_send_email_worker,
                          args=(to_addr, subject, html_body, text_body),
