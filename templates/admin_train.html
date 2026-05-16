@@ -107,7 +107,29 @@
           </div>
           <div class="form-group">
             <label>Avatar Emoji</label>
-            <input type="text" name="avatar" value="{{ agent.avatar }}" maxlength="4">
+            <div class="emoji-picker-wrap" style="position:relative;">
+              <div class="emoji-trigger" id="emojiTrigger"
+                   style="display:flex;align-items:center;gap:10px;background:#1f2937;border:1.5px solid rgba(255,255,255,0.1);border-radius:8px;padding:8px 12px;cursor:pointer;user-select:none;width:fit-content;min-width:120px;">
+                <span id="emojiPreview" style="font-size:1.6rem;line-height:1;">{{ agent.avatar }}</span>
+                <span style="color:#94a3b8;font-size:0.85rem;">Change ▾</span>
+              </div>
+              <input type="hidden" name="avatar" id="avatarInput" value="{{ agent.avatar }}">
+              <div id="emojiDropdown" style="display:none;position:absolute;top:calc(100% + 6px);left:0;z-index:999;
+                   background:#1e2535;border:1.5px solid rgba(255,255,255,0.12);border-radius:12px;
+                   padding:12px;width:320px;box-shadow:0 8px 32px rgba(0,0,0,0.5);">
+                <div id="emojiCatTabs" style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap;"></div>
+                <input type="text" id="emojiSearch" placeholder="Search emojis…"
+                       style="width:100%;box-sizing:border-box;background:#111827;border:1px solid rgba(255,255,255,0.1);
+                              border-radius:6px;padding:6px 10px;color:#fff;font-size:0.82rem;margin-bottom:8px;">
+                <div id="emojiGrid" style="display:grid;grid-template-columns:repeat(8,1fr);gap:4px;max-height:200px;overflow-y:auto;"></div>
+                <div style="margin-top:10px;border-top:1px solid rgba(255,255,255,0.08);padding-top:10px;">
+                  <label style="font-size:0.78rem;color:#6b7280;">Or type any emoji:</label>
+                  <input type="text" id="emojiCustom" maxlength="4" placeholder="✨"
+                         style="width:60px;background:#111827;border:1px solid rgba(255,255,255,0.1);
+                                border-radius:6px;padding:5px 8px;color:#fff;font-size:1.1rem;text-align:center;margin-left:8px;">
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -122,20 +144,19 @@
       <!-- Model -->
       <div class="config-card">
         <h3>🤖 AI Model</h3>
-        <select name="model" class="model-select">
-          {% for mid, mname in [
-            ('openai/gpt-4o-mini',               'GPT-4o Mini — Fast & affordable'),
-            ('openai/gpt-4o',                    'GPT-4o — Most capable OpenAI'),
-            ('anthropic/claude-3.5-haiku',       'Claude 3.5 Haiku — Fast & smart'),
-            ('anthropic/claude-sonnet-4-5',      'Claude Sonnet 4.5 — Best writing'),
-            ('google/gemini-flash-1.5',          'Gemini 1.5 Flash — Fast Google'),
-            ('google/gemini-2.0-flash-001',      'Gemini 2.0 Flash — Latest Google'),
-            ('meta-llama/llama-3.3-70b-instruct','Llama 3.3 70B — Open source'),
-            ('mistralai/mistral-7b-instruct',    'Mistral 7B — Lightweight')
-          ] %}
-          <option value="{{ mid }}" {{ 'selected' if agent.model == mid else '' }}>{{ mname }}</option>
-          {% endfor %}
-        </select>
+        <input type="hidden" name="model" id="modelValue" value="{{ agent.model }}">
+        <input type="text" id="modelSearch" placeholder="Search 300+ models… (gpt, claude, gemini, free…)" autocomplete="off" style="width:100%;margin-bottom:8px;">
+        <div id="modelSelected" style="display:flex;align-items:center;justify-content:space-between;background:#1a1f2e;border:1.5px solid #6366f1;border-radius:10px;padding:12px 14px;margin-bottom:8px;cursor:pointer;">
+          <div>
+            <div id="modelSelectedName" style="font-weight:700;font-size:0.92rem;">Loading…</div>
+            <div id="modelSelectedId" style="font-size:0.75rem;color:#6b7280;font-family:monospace;margin-top:2px;">{{ agent.model }}</div>
+          </div>
+          <div id="modelSelectedBadge" style="font-size:0.75rem;font-weight:700;padding:3px 8px;border-radius:12px;"></div>
+        </div>
+        <div id="modelDropdown" style="display:none;max-height:280px;overflow-y:auto;border:1px solid rgba(255,255,255,0.1);border-radius:10px;background:#111827;">
+          <div id="modelList"></div>
+        </div>
+        <p style="font-size:0.78rem;color:#6b7280;margin-top:8px;">✅ Free models cost nothing. Paid models use OpenRouter credits.</p>
       </div>
 
       <!-- API Key -->
@@ -333,5 +354,127 @@ window.addEventListener('beforeunload', function(e){
     e.returnValue = '';
   }
 });
+
+// ── Emoji Picker ──────────────────────────────────────────────────────────
+(function(){
+  var CATS = [
+    { label:'😀', name:'Faces', emojis:['😀','😃','😄','😁','😆','😅','🤣','😂','🙂','🙃','😉','😊','😇','🥰','😍','🤩','😘','😗','😚','😙','😋','😛','😜','🤪','😝','🤑','🤗','🤭','🤫','🤔','🤐','🤨','😐','😑','😶','😏','😒','🙄','😬','🤥','😌','😔','😪','🤤','😴','😷','🤒','🤕','🤢','🤮','🤧','🥵','🥶','🥴','😵','💫','🤯','🤠','🤓','🤨','😕','😟','🙁','☹️','😮','😯','😲','😳','🥺','😦','😧','😨','😰','😥','😢','😭','😱','😖','😣','😞','😓','😩','😫','🥱','😤','😡','😠','🤬','😈','👿','💀','☠️','💩','🤡','🐹','🐺','👻','👾','🤖'] },
+    { label:'👋', name:'People', emojis:['👋','🤚','🖐️','✋','🖖','👌','🤌','🤏','✌️','🤞','🤟','🤘','🤙','👈','👉','👆','🖕','👇','☝️','👍','👎','✊','👊','🤛','🤜','👏','🙌','👐','🤲','🤝','🙏','✍️','💅','🥳','💪','🦾','🦿','🦵','🦶','👂','🦻','👃','👀','👁️','👅','🧠','🦷','🦴','👶','🧂','👦','👧','🧑','👱','👨','🧔','👩','🧓','👴','👵'] },
+    { label:'🐶', name:'Animals', emojis:['🐶','🐱','🐭','🐹','🐰','🦊','🐻','🐼','🐨','🐯','🦁','🐮','🐷','🐸','🐵','🙈','🙉','🙊','🐔','🐧','🐦','🐤','🦆','🦅','🦉','🦇','🐺','🐗','🐴','🦄','🐝','🪱','🐛','🦋','🐌','🐞','🐜','🪲','🦟','🦗','🕷️','🦂','🐢','🐍','🦎','🦖','🦕','🐙','🦑','🦐','🦦','🦤','🐡','🐠','🐟','🐬','🐳','🐋','🦈','🐊','🐅','🐆','🦓','🦍','🦧','🐘','🦛','🦏','🐪','🐫','🦒','🦨','🦬','🐃','🐂','🐄','🐎','🐖','🐏','🐑','🦙','🐐','🦌','🐕','🐩','🦦‍🦦','🐈','🐈‍⬛','🦦','🐓','🦃','🦤','🦚','🦜','🦚','🕊️','🐇','🦥','🦨','🦡','🦫','🦦','🦥','🐁','🐀','🐿️','🦔'] },
+    { label:'🌸', name:'Nature', emojis:['🌸','🌼','🌻','🌺','🌹','🥀','🌷','🌱','🌿','☘️','🍀','🎋','🎍','🍃','🍂','🍁','🍄','🐚','🌾','💐','🌵','🎄','🌲','🌳','🌴','🌙','🌝','🌛','🌜','🌚','🌕','🌖','🌗','🌘','🌑','🌒','🌓','🌔','🌞','⭐','🌟','💫','✨','⚡','☄️','☀️','🌤️','⛅','🌥️','☁️','🌦️','🌧️','⛈️','🌩️','🌨️','❌','☃️','⛄','🌬️','💨','🌪️','🌫️','🌈','🌂','💧','💦','🌊'] },
+    { label:'🍕', name:'Food', emojis:['🍕','🍔','🌭','🥪','🌮','🌯','🥙','🧆','🥚','🍳','🥘','🍲','🫵','🥣','🥗','🍿','🧂','🥓','🍱','🍘','🍙','🍚','🍛','🍜','🍝','🍠','🍢','🍣','🍤','🍥','🤮','🍡','🦟','🦠','🦡','🍦','🍧','🍨','🍩','🍪','🎂','🍰','🧁','🥧','🍫','🍬','🍭','🍮','🍯','🍷','🥂','🍸','🍹','🧉','🍺','🍻','☕','🫖','🍵','🦳','🥤','🦸','🍶','🥃','🧊','🫙'] },
+    { label:'⚽', name:'Sports', emojis:['⚽','🏀','🏈','⚾','🎾','🏐','🎱','🏓','🏸','🥊','🥋','🥅','🏏','🏉','🎳','🏌️','🏇','🧘','🏄','🏊','🤸','🤼','🤾','🏆','🧈','🏦','🏅','🥇','🥈','🥉'] },
+    { label:'🚀', name:'Travel', emojis:['🚀','🛫','🛪','🛩️','🚁','🛸','🚂','🚊','🚗','🚕','🚛','🚌','🚏','🚑','🚓','🚔','🚒','🛵','🚲','🛥️','🛳️','⛵','🛰️','🚈','🚄','🚅','🚇','🚝','🚞','🚋','🚜','🚢','✈️','😖','🏠','🏡','🏢','🏾','🏰','🏟️','🏔️','🏖️','🏝️','🌍','🌎','🌏','🌆','🌃','🌄','🌅','🌇','🌉','🌌','🌠','🎑','🗽️','🗼','⛩️'] },
+    { label:'💼', name:'Work', emojis:['💼','💻','🖥️','🖱️','🖲️','⌨️','📱','☎️','📞','📟','📠','📡','📺','📹','📷','📸','📽️','🔍','🔎','💡','🔦','📔','📕','📖','📗','📘','📙','📚','📝','📄','📃','📊','📈','📉','📌','📎','✂️','🗂️','🗃️','🗄️','🗑️','🔓','🔒','🔐','🔑','🗝️','🔨','⛏️','🔧','🔩','🧰','🔬','🔭','📦','🧲','💰','💳','💴','💵','💸','🧧','🏦'] },
+    { label:'❤️', name:'Symbols', emojis:['❤️','🧡','💛','💚','💙','💜','🤎','🖤','💔','♥️','💞','💯','💢','💥','💦','💨','🕳️','💤','💣','👎','🔚','🔙','🔛','🔜','🔝','⬆️','⬇️','⬅️','➡️','🔄','♻️','✅','❌','✔️','❎','➕','➖','➗','✴️','🔱','🔰','⚪','🔴','🔵','🟠','🟡','🟢','🟣','🟤','🟥','🟦','🟧','⬛','⬜','◼️','◻️','🔶','🔷'] }
+  ];
+
+  var currentCat = 0;
+  var trigger   = document.getElementById('emojiTrigger');
+  var dropdown  = document.getElementById('emojiDropdown');
+  var grid      = document.getElementById('emojiGrid');
+  var preview   = document.getElementById('emojiPreview');
+  var hidden    = document.getElementById('avatarInput');
+  var search    = document.getElementById('emojiSearch');
+  var custom    = document.getElementById('emojiCustom');
+  var catTabs   = document.getElementById('emojiCatTabs');
+
+  function renderCatTabs(){
+    catTabs.innerHTML='';
+    CATS.forEach(function(cat,i){
+      var btn=document.createElement('button');
+      btn.type='button'; btn.textContent=cat.label; btn.title=cat.name;
+      btn.style.cssText='background:'+(i===currentCat?'#6366f1':'#1f2937')+';border:1px solid rgba(255,255,255,0.1);border-radius:6px;padding:4px 7px;cursor:pointer;font-size:1rem;';
+      btn.addEventListener('click',function(){ currentCat=i; search.value=''; renderCatTabs(); renderGrid(CATS[i].emojis); });
+      catTabs.appendChild(btn);
+    });
+  }
+
+  function renderGrid(emojis){
+    grid.innerHTML='';
+    emojis.forEach(function(em){
+      var btn=document.createElement('button');
+      btn.type='button'; btn.textContent=em;
+      btn.style.cssText='background:none;border:1px solid transparent;border-radius:6px;font-size:1.35rem;cursor:pointer;padding:3px;line-height:1;';
+      btn.addEventListener('mouseenter',function(){ this.style.background='rgba(99,102,241,0.18)'; this.style.borderColor='#6366f1'; });
+      btn.addEventListener('mouseleave',function(){ this.style.background='none'; this.style.borderColor='transparent'; });
+      btn.addEventListener('click',function(){ selectEmoji(em); });
+      grid.appendChild(btn);
+    });
+  }
+
+  function selectEmoji(em){ preview.textContent=em; hidden.value=em; dropdown.style.display='none'; }
+
+  trigger.addEventListener('click',function(e){
+    e.stopPropagation();
+    var open=dropdown.style.display!=='none';
+    if(open){ dropdown.style.display='none'; } else { dropdown.style.display='block'; renderCatTabs(); renderGrid(CATS[currentCat].emojis); search.value=''; search.focus(); }
+  });
+
+  document.addEventListener('click',function(){ dropdown.style.display='none'; });
+  dropdown.addEventListener('click',function(e){ e.stopPropagation(); });
+
+  search.addEventListener('input',function(){
+    var q=this.value.trim();
+    if(!q){ renderGrid(CATS[currentCat].emojis); return; }
+    var all=[]; CATS.forEach(function(c){ all=all.concat(c.emojis); }); renderGrid(all);
+  });
+
+  custom.addEventListener('input',function(){ var v=this.value.trim(); if(v){ preview.textContent=v; hidden.value=v; } });
+})();
+
+// ── Model Dropdown ──────────────────────────────────────────────────────────
+(function(){
+  var allModels=[], currentValue=document.getElementById('modelValue').value||'openai/gpt-4o-mini';
+  var searchEl=document.getElementById('modelSearch'), dropdown=document.getElementById('modelDropdown');
+  var listEl=document.getElementById('modelList'), selName=document.getElementById('modelSelectedName');
+  var selId=document.getElementById('modelSelectedId'), selBadge=document.getElementById('modelSelectedBadge');
+  var valueEl=document.getElementById('modelValue');
+
+  function fmt(p){ if(p===0) return 'FREE'; var m=p*1000000; return '$'+(m<1?m.toFixed(3):m.toFixed(2))+'/M'; }
+
+  function setBadge(m){
+    if(m.free){ selBadge.textContent='FREE'; selBadge.style.cssText='font-size:0.75rem;font-weight:700;padding:3px 8px;border-radius:12px;background:rgba(16,185,129,0.15);color:#34d399;border:1px solid rgba(16,185,129,0.3)'; }
+    else { selBadge.textContent=fmt(m.price_prompt); selBadge.style.cssText='font-size:0.75rem;font-weight:700;padding:3px 8px;border-radius:12px;background:rgba(99,102,241,0.12);color:#818cf8;border:1px solid rgba(99,102,241,0.2)'; }
+  }
+
+  function selectModel(m){ currentValue=m.id; valueEl.value=m.id; selName.textContent=m.name; selId.textContent=m.id; setBadge(m); dropdown.style.display='none'; searchEl.value=''; }
+
+  function renderList(models){
+    listEl.innerHTML='';
+    if(!models.length){ listEl.innerHTML='<div style="padding:14px;text-align:center;color:#6b7280;font-size:0.85rem;">No models found</div>'; return; }
+    var groups={};
+    models.forEach(function(m){ var p=m.id.split('/')[0]||'other'; if(!groups[p]) groups[p]=[]; groups[p].push(m); });
+    Object.keys(groups).sort().forEach(function(provider){
+      var h=document.createElement('div');
+      h.style.cssText='padding:6px 12px 4px;font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#4b5563;border-top:1px solid rgba(255,255,255,0.05);';
+      h.textContent=provider; listEl.appendChild(h);
+      groups[provider].forEach(function(m){
+        var row=document.createElement('div'); var isSel=m.id===currentValue;
+        row.style.cssText='display:flex;align-items:center;justify-content:space-between;padding:9px 14px;cursor:pointer;transition:background 0.12s;'+(isSel?'background:rgba(99,102,241,0.15);':'');
+        row.innerHTML='<div style="flex:1;min-width:0;"><div style="font-size:0.88rem;font-weight:'+(isSel?'700':'500')+';white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:'+(isSel?'#a5b4fc':'#e5e7eb')+';">'+m.name+'</div><div style="font-size:0.73rem;color:#4b5563;font-family:monospace;margin-top:1px;">'+m.id+'</div></div><div style="flex-shrink:0;margin-left:10px;font-size:0.73rem;font-weight:700;padding:2px 7px;border-radius:10px;'+(m.free?'background:rgba(16,185,129,0.12);color:#34d399;':'background:rgba(99,102,241,0.1);color:#818cf8;')+'">'+(m.free?'FREE':fmt(m.price_prompt))+'</div>';
+        row.addEventListener('mouseenter',function(){ if(m.id!==currentValue) this.style.background='rgba(255,255,255,0.04)'; });
+        row.addEventListener('mouseleave',function(){ if(m.id!==currentValue) this.style.background=''; });
+        row.addEventListener('click',function(){ selectModel(m); });
+        listEl.appendChild(row);
+      });
+    });
+  }
+
+  fetch('/api/openrouter-models')
+    .then(function(r){ return r.json(); })
+    .then(function(data){
+      if(!Array.isArray(data)) return;
+      allModels=data;
+      var cur=allModels.find(function(m){ return m.id===currentValue; });
+      if(cur){ selName.textContent=cur.name; selId.textContent=cur.id; setBadge(cur); }
+      else { selName.textContent=currentValue; }
+    });
+
+  searchEl.addEventListener('focus',function(){ renderList(allModels.filter(function(m){ var q=searchEl.value.toLowerCase(); return !q||m.id.toLowerCase().includes(q)||m.name.toLowerCase().includes(q)||(q==='free'&&m.free); })); dropdown.style.display='block'; });
+  searchEl.addEventListener('input',function(){ var q=this.value.toLowerCase(); renderList(allModels.filter(function(m){ return !q||m.id.toLowerCase().includes(q)||m.name.toLowerCase().includes(q)||(q==='free'&&m.free); })); dropdown.style.display='block'; });
+  document.getElementById('modelSelected').addEventListener('click',function(){ searchEl.focus(); renderList(allModels); dropdown.style.display='block'; });
+  document.addEventListener('click',function(e){ if(!searchEl.contains(e.target)&&!dropdown.contains(e.target)&&!document.getElementById('modelSelected').contains(e.target)) dropdown.style.display='none'; });
+})();
 </script>
 {% endblock %}
