@@ -5,13 +5,8 @@
   .color-preview{width:36px;height:36px;border-radius:50%;border:2px solid rgba(255,255,255,0.2);
                  display:inline-block;vertical-align:middle;margin-left:10px;}
   .hint{font-size:0.78rem;color:#6b7280;margin-top:4px;}
-  .models{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px;margin-top:6px;}
-  .model-opt{background:#1f2937;border:1.5px solid rgba(255,255,255,0.1);border-radius:8px;
-             padding:10px 12px;cursor:pointer;transition:border-color 0.2s;}
-  .model-opt:hover,.model-opt.selected{border-color:#6366f1;}
-  .model-opt input{display:none;}
-  .model-name{font-weight:600;font-size:0.88rem;}
-  .model-desc{font-size:0.76rem;color:#6b7280;margin-top:2px;}
+  #modelDropdown::-webkit-scrollbar{width:5px;}
+  #modelDropdown::-webkit-scrollbar-thumb{background:rgba(99,102,241,0.3);border-radius:3px;}
 </style>
 <div class="container-sm" style="padding-top:2rem;max-width:680px;">
   <div style="margin-bottom:1.5rem;">
@@ -88,26 +83,32 @@
 
     <div class="card" style="margin-bottom:1.5rem;">
       <h3 style="font-weight:700;margin-bottom:1rem;font-size:0.95rem;color:#94a3b8;text-transform:uppercase;letter-spacing:.05em;">AI Model</h3>
-      <div class="models">
-        {% for model_id, model_name, model_desc in [
-          ('openai/gpt-4o-mini',               'GPT-4o Mini',        'Fast & affordable. Great for most uses.'),
-          ('openai/gpt-4o',                    'GPT-4o',             'Most capable OpenAI model.'),
-          ('anthropic/claude-3.5-haiku',       'Claude 3.5 Haiku',   'Fast, smart, great writing.'),
-          ('anthropic/claude-sonnet-4-5',      'Claude Sonnet 4.5',  'Anthropic\'s best model.'),
-          ('google/gemini-flash-1.5',          'Gemini 1.5 Flash',   'Fast & free Google model.'),
-          ('google/gemini-2.0-flash-001',      'Gemini 2.0 Flash',   'Latest Google model.'),
-          ('meta-llama/llama-3.3-70b-instruct','Llama 3.3 70B',      'Powerful open-source model.'),
-          ('xiaomi/mimo-v2-flash',              'MiMo v2 Flash',      'Xiaomi\'s fast reasoning model.'),
-          ('mistralai/mistral-7b-instruct',    'Mistral 7B',         'Lightweight & fast.')
-        ] %}
-        <label class="model-opt {{ 'selected' if (agent and agent.model == model_id) or (not agent and model_id == 'openai/gpt-4o-mini') else '' }}">
-          <input type="radio" name="model" value="{{ model_id }}"
-            {{ 'checked' if (agent and agent.model == model_id) or (not agent and model_id == 'openai/gpt-4o-mini') else '' }}>
-          <div class="model-name">{{ model_name }}</div>
-          <div class="model-desc">{{ model_desc }}</div>
-        </label>
-        {% endfor %}
+
+      <!-- Hidden input that actually gets submitted -->
+      <input type="hidden" name="model" id="modelValue" value="{{ agent.model if agent else 'openai/gpt-4o-mini' }}">
+
+      <!-- Search box -->
+      <input type="text" id="modelSearch" placeholder="Search 300+ models... (e.g. gpt, claude, gemini, llama, free)"
+             autocomplete="off"
+             style="width:100%;margin-bottom:8px;">
+
+      <!-- Selected model display -->
+      <div id="modelSelected"
+           style="display:flex;align-items:center;justify-content:space-between;background:#1a1f2e;border:1.5px solid #6366f1;border-radius:10px;padding:12px 14px;margin-bottom:8px;">
+        <div>
+          <div id="modelSelectedName" style="font-weight:700;font-size:0.92rem;">Loading models…</div>
+          <div id="modelSelectedId" style="font-size:0.75rem;color:#6b7280;font-family:monospace;margin-top:2px;">{{ agent.model if agent else 'openai/gpt-4o-mini' }}</div>
+        </div>
+        <div id="modelSelectedBadge" style="font-size:0.75rem;font-weight:700;padding:3px 8px;border-radius:12px;"></div>
       </div>
+
+      <!-- Dropdown list -->
+      <div id="modelDropdown"
+           style="display:none;max-height:320px;overflow-y:auto;border:1px solid rgba(255,255,255,0.1);border-radius:10px;background:#111827;">
+        <div id="modelList"></div>
+      </div>
+
+      <p style="font-size:0.78rem;color:#6b7280;margin-top:8px;">✅ Free models cost nothing. Paid models use your OpenRouter credits. <a href="https://openrouter.ai/models" target="_blank" style="color:#6366f1;">Browse all on OpenRouter →</a></p>
     </div>
 
     <div class="card" style="margin-bottom:1.5rem;">
@@ -246,12 +247,137 @@ if(cp&&hex){cp.addEventListener('input',function(){hex.textContent=this.value;})
     }
   });
 })();
-// Model card selection highlight
-document.querySelectorAll('.model-opt input').forEach(function(r){
-  r.addEventListener('change',function(){
-    document.querySelectorAll('.model-opt').forEach(function(el){el.classList.remove('selected');});
-    r.closest('.model-opt').classList.add('selected');
+// ── Model Dropdown ──────────────────────────────────────────────────────────
+(function(){
+  var allModels = [];
+  var currentValue = document.getElementById('modelValue').value || 'openai/gpt-4o-mini';
+  var searchEl   = document.getElementById('modelSearch');
+  var dropdown   = document.getElementById('modelDropdown');
+  var listEl     = document.getElementById('modelList');
+  var selName    = document.getElementById('modelSelectedName');
+  var selId      = document.getElementById('modelSelectedId');
+  var selBadge   = document.getElementById('modelSelectedBadge');
+  var valueEl    = document.getElementById('modelValue');
+
+  function formatPrice(p){
+    if(p === 0) return 'FREE';
+    if(p < 0.000001) return '<$0.01/M';
+    var per1m = (p * 1000000);
+    return '$' + (per1m < 1 ? per1m.toFixed(3) : per1m.toFixed(2)) + '/M';
+  }
+
+  function setBadge(model){
+    if(model.free){
+      selBadge.textContent = 'FREE';
+      selBadge.style.background = 'rgba(16,185,129,0.15)';
+      selBadge.style.color = '#34d399';
+      selBadge.style.border = '1px solid rgba(16,185,129,0.3)';
+    } else {
+      selBadge.textContent = formatPrice(model.price_prompt);
+      selBadge.style.background = 'rgba(99,102,241,0.12)';
+      selBadge.style.color = '#818cf8';
+      selBadge.style.border = '1px solid rgba(99,102,241,0.2)';
+    }
+  }
+
+  function selectModel(model){
+    currentValue = model.id;
+    valueEl.value = model.id;
+    selName.textContent = model.name;
+    selId.textContent = model.id;
+    setBadge(model);
+    dropdown.style.display = 'none';
+    searchEl.value = '';
+  }
+
+  function renderList(models){
+    listEl.innerHTML = '';
+    if(!models.length){
+      listEl.innerHTML = '<div style="padding:16px;text-align:center;color:#6b7280;font-size:0.85rem;">No models found</div>';
+      return;
+    }
+    // Group by provider
+    var groups = {};
+    models.forEach(function(m){
+      var provider = m.id.split('/')[0] || 'other';
+      if(!groups[provider]) groups[provider] = [];
+      groups[provider].push(m);
+    });
+    Object.keys(groups).sort().forEach(function(provider){
+      var header = document.createElement('div');
+      header.style.cssText = 'padding:6px 12px 4px;font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#4b5563;border-top:1px solid rgba(255,255,255,0.05);';
+      header.textContent = provider;
+      listEl.appendChild(header);
+      groups[provider].forEach(function(m){
+        var row = document.createElement('div');
+        var isSelected = m.id === currentValue;
+        row.style.cssText = 'display:flex;align-items:center;justify-content:space-between;padding:9px 14px;cursor:pointer;transition:background 0.12s;' + (isSelected ? 'background:rgba(99,102,241,0.15);' : '');
+        row.innerHTML = '<div style="flex:1;min-width:0;">'
+          + '<div style="font-size:0.88rem;font-weight:'+(isSelected?'700':'500')+';white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:'+(isSelected?'#a5b4fc':'#e5e7eb')+'">' + m.name + '</div>'
+          + '<div style="font-size:0.73rem;color:#4b5563;font-family:monospace;margin-top:1px;">' + m.id + '</div>'
+          + '</div>'
+          + '<div style="flex-shrink:0;margin-left:10px;font-size:0.73rem;font-weight:700;padding:2px 7px;border-radius:10px;' + (m.free ? 'background:rgba(16,185,129,0.12);color:#34d399;' : 'background:rgba(99,102,241,0.1);color:#818cf8;') + '">' + (m.free ? 'FREE' : formatPrice(m.price_prompt)) + '</div>';
+        row.addEventListener('mouseenter', function(){ if(m.id!==currentValue) this.style.background='rgba(255,255,255,0.04)'; });
+        row.addEventListener('mouseleave', function(){ if(m.id!==currentValue) this.style.background=''; });
+        row.addEventListener('click', function(){ selectModel(m); });
+        listEl.appendChild(row);
+      });
+    });
+  }
+
+  function filterModels(q){
+    if(!q) return allModels;
+    q = q.toLowerCase();
+    return allModels.filter(function(m){
+      return m.id.toLowerCase().includes(q) || m.name.toLowerCase().includes(q)
+        || (q === 'free' && m.free);
+    });
+  }
+
+  // Load models from our proxy endpoint
+  fetch('/api/openrouter-models')
+    .then(function(r){ return r.json(); })
+    .then(function(data){
+      if(!Array.isArray(data)) return;
+      allModels = data;
+      // Update selected display
+      var cur = allModels.find(function(m){ return m.id === currentValue; });
+      if(cur){
+        selName.textContent = cur.name;
+        selId.textContent = cur.id;
+        setBadge(cur);
+      } else {
+        selName.textContent = currentValue;
+        selId.textContent = currentValue;
+        selBadge.textContent = '';
+      }
+    })
+    .catch(function(){ selName.textContent = currentValue; });
+
+  // Open dropdown on search focus
+  searchEl.addEventListener('focus', function(){
+    renderList(filterModels(this.value));
+    dropdown.style.display = 'block';
   });
-});
+
+  searchEl.addEventListener('input', function(){
+    renderList(filterModels(this.value));
+    dropdown.style.display = 'block';
+  });
+
+  // Close on outside click
+  document.addEventListener('click', function(e){
+    if(!searchEl.contains(e.target) && !dropdown.contains(e.target)){
+      dropdown.style.display = 'none';
+    }
+  });
+
+  // Also open on click of selected display
+  document.getElementById('modelSelected').addEventListener('click', function(){
+    searchEl.focus();
+    renderList(filterModels(''));
+    dropdown.style.display = 'block';
+  });
+})();
 </script>
 {% endblock %}

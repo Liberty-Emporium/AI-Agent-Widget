@@ -674,6 +674,44 @@ def analyze_photo_public():
     except Exception:
         return jsonify({'description': ''})
 
+@app.route('/api/openrouter-models')
+@login_required
+def openrouter_models():
+    """Proxy OpenRouter model list — cached in-process for 10 minutes."""
+    import time
+    cache = openrouter_models.__dict__
+    now = time.time()
+    if cache.get('data') and now - cache.get('ts', 0) < 600:
+        return jsonify(cache['data'])
+    try:
+        req = urllib.request.Request(
+            'https://openrouter.ai/api/v1/models',
+            headers={'Accept': 'application/json'},
+        )
+        with _safe_urlopen(req, timeout=10) as resp:
+            raw = json.loads(resp.read().decode())
+        models = []
+        for m in raw.get('data', []):
+            pricing = m.get('pricing', {})
+            try:
+                prompt_price = float(pricing.get('prompt', 0) or 0)
+            except Exception:
+                prompt_price = 0
+            models.append({
+                'id':          m.get('id', ''),
+                'name':        m.get('name', m.get('id', '')),
+                'context':     m.get('context_length', 0),
+                'price_prompt': prompt_price,
+                'free':        prompt_price == 0,
+            })
+        # Sort: free first, then by provider name
+        models.sort(key=lambda x: (not x['free'], x['id'].lower()))
+        cache['data'] = models
+        cache['ts'] = now
+        return jsonify(models)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/health')
 def health():
     try:
