@@ -631,7 +631,16 @@ def strip_action_block(reply_text):
 
 @app.route('/')
 def index():
-    return render_template('landing.html')
+    # Pass Echo Brain agent ID so the landing page shows the right widget
+    try:
+        db = get_db()
+        echo_agent = db.execute(
+            "SELECT id FROM agents WHERE name='Echo Brain' LIMIT 1"
+        ).fetchone()
+        echo_agent_id = echo_agent['id'] if echo_agent else None
+    except Exception:
+        echo_agent_id = None
+    return render_template('landing.html', echo_agent_id=echo_agent_id)
 
 @app.route('/old-index')
 def old_index():
