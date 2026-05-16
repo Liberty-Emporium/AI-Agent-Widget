@@ -741,39 +741,38 @@ def logout():
     return redirect(url_for('index'))
 
 # ── Email sending ────────────────────────────────────────────────────────────
-import smtplib
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
-
-SMTP_HOST     = os.environ.get('SMTP_HOST', 'smtp.gmail.com')
-SMTP_PORT     = int(os.environ.get('SMTP_PORT', '587'))
-SMTP_USER     = os.environ.get('SMTP_USER', '')
-SMTP_PASSWORD = os.environ.get('SMTP_PASSWORD', '')
-SMTP_FROM     = os.environ.get('SMTP_FROM', '') or SMTP_USER
+RESEND_API_KEY = os.environ.get('RESEND_API_KEY', '')
+EMAIL_FROM     = os.environ.get('EMAIL_FROM', 'Alexander AI <onboarding@resend.dev>')
 
 def _send_email_worker(to_addr, subject, html_body, text_body=None):
-    """Blocking SMTP send — always call via send_email() for async dispatch."""
+    """Send via Resend HTTP API — always call via send_email() for async dispatch."""
     try:
-        msg = MIMEMultipart('alternative')
-        msg['Subject'] = subject
-        msg['From']    = SMTP_FROM
-        msg['To']      = to_addr
-        if text_body:
-            msg.attach(MIMEText(text_body, 'plain'))
-        msg.attach(MIMEText(html_body, 'html'))
-        with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=15) as server:
-            server.ehlo()
-            server.starttls()
-            server.login(SMTP_USER, SMTP_PASSWORD)
-            server.sendmail(SMTP_USER, to_addr, msg.as_string())
-        app.logger.info(f'Email sent to {to_addr}: {subject}')
+        payload = json.dumps({
+            'from': EMAIL_FROM,
+            'to': [to_addr],
+            'subject': subject,
+            'html': html_body,
+            'text': text_body or '',
+        }).encode('utf-8')
+        req = urllib.request.Request(
+            'https://api.resend.com/emails',
+            data=payload,
+            headers={
+                'Authorization': f'Bearer {RESEND_API_KEY}',
+                'Content-Type': 'application/json',
+            },
+            method='POST'
+        )
+        with _safe_urlopen(req, timeout=15) as resp:
+            result = json.loads(resp.read().decode())
+        app.logger.info(f'Email sent to {to_addr} via Resend: {result.get("id")}')
     except Exception as e:
         app.logger.error(f'Email send error: {e}')
 
 def send_email(to_addr, subject, html_body, text_body=None):
     """Send email in background thread — never blocks the request."""
-    if not SMTP_USER or not SMTP_PASSWORD:
-        app.logger.warning('SMTP not configured — email not sent')
+    if not RESEND_API_KEY:
+        app.logger.warning('RESEND_API_KEY not configured — email not sent')
         return False
     t = threading.Thread(target=_send_email_worker,
                          args=(to_addr, subject, html_body, text_body),
