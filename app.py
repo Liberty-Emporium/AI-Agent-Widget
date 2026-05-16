@@ -741,38 +741,49 @@ def logout():
     return redirect(url_for('index'))
 
 # ── Email sending ────────────────────────────────────────────────────────────
-RESEND_API_KEY = os.environ.get('RESEND_API_KEY', '')
-EMAIL_FROM     = os.environ.get('EMAIL_FROM', 'Alexander AI <onboarding@resend.dev>')
+BREVO_API_KEY  = os.environ.get('BREVO_API_KEY', '')
+EMAIL_FROM     = os.environ.get('EMAIL_FROM', 'Alexander AI <noreply@alexanderai.site>')
+EMAIL_FROM_NAME = os.environ.get('EMAIL_FROM_NAME', 'Alexander AI')
+
+def _parse_from(from_str):
+    """Parse 'Name <email>' into (name, email) tuple."""
+    if '<' in from_str and '>' in from_str:
+        name = from_str[:from_str.index('<')].strip()
+        email = from_str[from_str.index('<')+1:from_str.index('>')].strip()
+        return name, email
+    return EMAIL_FROM_NAME, from_str.strip()
 
 def _send_email_worker(to_addr, subject, html_body, text_body=None):
-    """Send via Resend HTTP API — always call via send_email() for async dispatch."""
+    """Send via Brevo transactional email API."""
     try:
+        from_name, from_email = _parse_from(EMAIL_FROM)
         payload = json.dumps({
-            'from': EMAIL_FROM,
-            'to': [to_addr],
+            'sender': {'name': from_name, 'email': from_email},
+            'to': [{'email': to_addr}],
             'subject': subject,
-            'html': html_body,
-            'text': text_body or '',
+            'htmlContent': html_body,
+            'textContent': text_body or '',
         }).encode('utf-8')
         req = urllib.request.Request(
-            'https://api.resend.com/emails',
+            'https://api.brevo.com/v3/smtp/email',
             data=payload,
             headers={
-                'Authorization': f'Bearer {RESEND_API_KEY}',
+                'api-key': BREVO_API_KEY,
                 'Content-Type': 'application/json',
+                'Accept': 'application/json',
             },
             method='POST'
         )
         with _safe_urlopen(req, timeout=15) as resp:
             result = json.loads(resp.read().decode())
-        app.logger.info(f'Email sent to {to_addr} via Resend: {result.get("id")}')
+        app.logger.info(f'Email sent to {to_addr} via Brevo: {result.get("messageId")}')
     except Exception as e:
         app.logger.error(f'Email send error: {e}')
 
 def send_email(to_addr, subject, html_body, text_body=None):
     """Send email in background thread — never blocks the request."""
-    if not RESEND_API_KEY:
-        app.logger.warning('RESEND_API_KEY not configured — email not sent')
+    if not BREVO_API_KEY:
+        app.logger.warning('BREVO_API_KEY not configured — email not sent')
         return False
     t = threading.Thread(target=_send_email_worker,
                          args=(to_addr, subject, html_body, text_body),
