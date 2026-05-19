@@ -635,7 +635,7 @@ def index():
     try:
         db = get_db()
         echo_agent = db.execute(
-            "SELECT id FROM agents WHERE name='Echo Brain' LIMIT 1"
+            "SELECT id FROM agents WHERE name='Alexander AI Solutions' LIMIT 1"
         ).fetchone()
         echo_agent_id = echo_agent['id'] if echo_agent else None
     except Exception:
@@ -937,7 +937,7 @@ def dashboard():
     plan = plan_row['plan'] if plan_row else 'free'
     # Dynamically resolve Echo Brain agent ID for the dashboard widget
     echo_agent = db.execute(
-        "SELECT id FROM agents WHERE user_id=? AND name='Echo Brain'",
+        "SELECT id FROM agents WHERE user_id=? AND name='Alexander AI Solutions'",
         (session['user_id'],)
     ).fetchone()
     echo_agent_id = echo_agent['id'] if echo_agent else None
@@ -2056,12 +2056,12 @@ def seed_echo_agent():
             db.close()
             return
         existing = db.execute(
-            "SELECT id FROM agents WHERE user_id=? AND name='Echo Brain'",
+            "SELECT id FROM agents WHERE user_id=? AND name='Alexander AI Solutions'",
             (admin['id'],)
         ).fetchone()
         if existing:
             db.execute('UPDATE agents SET system_prompt=?, tagline=? WHERE id=?',
-                (ECHO_SYSTEM_PROMPT, 'Your AI business partner — always on, always ready', existing['id']))
+                (ECHO_SYSTEM_PROMPT, 'Alexander AI Solutions — always on, always ready', existing['id']))
             db.commit()
             db.close()
             return
@@ -2071,8 +2071,8 @@ def seed_echo_agent():
             INSERT INTO agents
             (id,user_id,name,tagline,color,avatar,system_prompt,model,api_key,allowed_origins)
             VALUES (?,?,?,?,?,?,?,?,?,?)
-        ''', (agent_id, admin['id'], 'Echo Brain',
-              'Your AI business partner — always on, always ready',
+        ''', (agent_id, admin['id'], 'Alexander AI Solutions',
+              'Alexander AI Solutions — always on, always ready',
               '#7c6ff7', '👾', ECHO_SYSTEM_PROMPT,
               'openai/gpt-4o-mini', api_key, '*'))
         db.commit()
@@ -2105,7 +2105,7 @@ def echo_brain_id():
     if not admin:
         return jsonify({'error': 'admin not found'}), 404
     agent = db.execute(
-        "SELECT id, name FROM agents WHERE user_id=? AND name='Echo Brain'",
+        "SELECT id, name FROM agents WHERE user_id=? AND name='Alexander AI Solutions'",
         (admin['id'],)
     ).fetchone()
     if not agent:
