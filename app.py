@@ -420,7 +420,7 @@ MODEL_ALIASES = {
 def normalize_model(model):
     """Fix common shorthand model names to their full OpenRouter IDs."""
     if not model:
-        return 'openai/gpt-4o-mini'
+        return 'minimax/minimax-m2.5:free'
     return MODEL_ALIASES.get(model, MODEL_ALIASES.get(model.lower(), model))
 
 migrate_model_names()
@@ -667,7 +667,7 @@ def analyze_photo_public():
     if not agent or not agent['api_key']:
         return jsonify({'description': ''})
     try:
-        model = normalize_model(agent['model'] or 'openai/gpt-4o-mini')
+        model = normalize_model(agent['model'] or 'minimax/minimax-m2.5:free')
         reply = call_openrouter([{
             'role': 'user',
             'content': [
